@@ -7,6 +7,7 @@ import androidx.media3.common.util.UnstableApi
 import androidx.media3.database.DatabaseProvider
 import androidx.media3.database.StandaloneDatabaseProvider
 import androidx.media3.datasource.DataSource
+import androidx.media3.datasource.DefaultDataSource
 import androidx.media3.datasource.DefaultHttpDataSource
 import androidx.media3.datasource.cache.Cache
 import androidx.media3.datasource.cache.CacheDataSource
@@ -68,9 +69,15 @@ class SZDownloadManager private constructor(
         .setReadTimeoutMs(15000)
         .setAllowCrossProtocolRedirects(true)
 
+    // DefaultDataSource wraps httpDataSourceFactory and also handles local
+    // content:// and file:// URIs, so both local and network videos work.
+    val defaultDataSourceFactory: DataSource.Factory by lazy {
+        DefaultDataSource.Factory(context, httpDataSourceFactory)
+    }
+
     val cacheDataSourceFactory: DataSource.Factory = CacheDataSource.Factory()
         .setCache(downloadCache)
-        .setUpstreamDataSourceFactory(httpDataSourceFactory)
+        .setUpstreamDataSourceFactory(defaultDataSourceFactory)
         .setCacheWriteDataSinkFactory(null) // Read-only cache datasource for playback
         .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
 

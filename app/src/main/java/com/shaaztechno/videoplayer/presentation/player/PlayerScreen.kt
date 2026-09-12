@@ -9,14 +9,16 @@ import android.widget.FrameLayout
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.*
+import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material.icons.rounded.*
 import androidx.compose.material3.*
-import androidx.compose.material3.TabRowDefaults.tabIndicatorOffset
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -30,6 +32,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.viewinterop.AndroidView
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.lifecycle.Lifecycle
 import androidx.lifecycle.LifecycleEventObserver
 import androidx.lifecycle.viewmodel.compose.viewModel
@@ -82,21 +86,41 @@ fun PlayerScreen(
     var showControls by remember { mutableStateOf(true) }
     var gestureText by remember { mutableStateOf<String?>(null) }
     var gestureIcon by remember { mutableStateOf<ImageVector?>(null) }
-    
+    // Float accumulator for smooth volume gesture (mirrors brightness approach)
+    var volumeAccumulator by remember { mutableFloatStateOf(-1f) }
+
     var playbackSpeed by remember { mutableFloatStateOf(1f) }
     var resizeMode by remember { mutableIntStateOf(AspectRatioFrameLayout.RESIZE_MODE_FIT) }
+    var isFullscreen by remember { mutableStateOf(true) }
+
+    // Buffering state — tracked via Player.Listener so it updates on every state change
+    var isBuffering by remember { mutableStateOf(false) }
+    DisposableEffect(exoPlayer) {
+        val listener = object : Player.Listener {
+            override fun onPlaybackStateChanged(playbackState: Int) {
+                isBuffering = playbackState == Player.STATE_BUFFERING
+            }
+        }
+        exoPlayer.addListener(listener)
+        onDispose { exoPlayer.removeListener(listener) }
+    }
     
-    var showSettingsSheet by remember { mutableStateOf(false) }
+    var activeDetailType by remember { mutableStateOf<PlayerDetailType?>(null) }
 
     val scope = rememberCoroutineScope()
 
     // Hide controls after delay
-    LaunchedEffect(showControls, isLocked, showSettingsSheet) {
-        if (showControls && !showSettingsSheet && !isLocked) {
+    LaunchedEffect(showControls, isLocked, activeDetailType) {
+        if (showControls && activeDetailType == null && !isLocked) {
             delay(4000)
             showControls = false
         }
     }
+
+    // Tracks whether the player was playing before a lifecycle pause,
+    // so we can restore the exact state (play/paused) on resume
+    // instead of always forcing playback.
+    var wasPlayingBeforeLifecyclePause by remember { mutableStateOf(true) }
 
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
@@ -105,8 +129,14 @@ fun PlayerScreen(
         
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
-                Lifecycle.Event.ON_PAUSE -> exoPlayer.pause()
-                Lifecycle.Event.ON_RESUME -> exoPlayer.play()
+                Lifecycle.Event.ON_PAUSE -> {
+                    wasPlayingBeforeLifecyclePause = exoPlayer.isPlaying
+                    exoPlayer.pause()
+                }
+                Lifecycle.Event.ON_RESUME -> {
+                    // Restore previous state: only resume if it was playing before
+                    if (wasPlayingBeforeLifecyclePause) exoPlayer.play()
+                }
                 else -> {}
             }
         }
@@ -121,7 +151,19 @@ fun PlayerScreen(
 
     LaunchedEffect(uiState.video) {
         uiState.video?.let { video ->
-            val mediaItem = MediaItem.fromUri(video.url)
+            // For local/downloaded videos prefer localUri (content:// from MediaStore).
+            // Provide a video/* MIME hint so ExoPlayer can detect format even without
+            // a file extension in the URI path.
+            val playUri = (video.localUri ?: video.url).let { android.net.Uri.parse(it) }
+            val mediaItem = if (video.type == com.shaaztechno.videoplayer.domain.model.VideoType.LOCAL ||
+                video.type == com.shaaztechno.videoplayer.domain.model.VideoType.DOWNLOADED) {
+                MediaItem.Builder()
+                    .setUri(playUri)
+                    .setMimeType("video/*")
+                    .build()
+            } else {
+                MediaItem.fromUri(playUri)
+            }
             exoPlayer.setMediaItem(mediaItem)
             if (uiState.initialPosition > 0) {
                 exoPlayer.seekTo(uiState.initialPosition)
@@ -201,13 +243,16 @@ fun PlayerScreen(
                                     }
                                 }
                             } else {
-                                // Volume (Right side)
+                                // Volume (Right side) — use float accumulator for smoothness
                                 val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
-                                val currentVolume = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC)
-                                val delta = -(dragAmount.y / height * maxVolume).toInt()
-                                val nextVolume = (currentVolume + delta).coerceIn(0, maxVolume)
+                                // Seed accumulator from actual system volume on first touch
+                                if (volumeAccumulator < 0f) {
+                                    volumeAccumulator = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat()
+                                }
+                                volumeAccumulator = (volumeAccumulator - dragAmount.y / height * maxVolume).coerceIn(0f, maxVolume.toFloat())
+                                val nextVolume = volumeAccumulator.toInt()
                                 audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, nextVolume, 0)
-                                gestureText = "Volume: ${(nextVolume.toFloat() / maxVolume * 100).toInt()}%"
+                                gestureText = "Volume: ${(volumeAccumulator / maxVolume * 100).toInt()}%"
                                 gestureIcon = if (nextVolume == 0) Icons.Rounded.VolumeOff else Icons.Rounded.VolumeUp
                             }
                         } else {
@@ -220,6 +265,7 @@ fun PlayerScreen(
                         }
                     },
                     onDragEnd = {
+                        volumeAccumulator = -1f  // reset so next drag seeds from real system volume
                         scope.launch {
                             delay(1000)
                             gestureText = null
@@ -264,12 +310,31 @@ fun PlayerScreen(
                 onPipClick = onPipClick,
                 onShareClick = { uiState.video?.let(onShareClick) },
                 isVisible = showControls,
-                onSettingsClick = { showSettingsSheet = true },
-                onResizeModeChange = {
-                    resizeMode = when (resizeMode) {
-                        AspectRatioFrameLayout.RESIZE_MODE_FIT -> AspectRatioFrameLayout.RESIZE_MODE_FILL
-                        AspectRatioFrameLayout.RESIZE_MODE_FILL -> AspectRatioFrameLayout.RESIZE_MODE_ZOOM
-                        else -> AspectRatioFrameLayout.RESIZE_MODE_FIT
+                onSpeedClick = { activeDetailType = PlayerDetailType.SPEED },
+                onAspectClick = { activeDetailType = PlayerDetailType.ASPECT },
+                onAudioClick = { activeDetailType = PlayerDetailType.AUDIO },
+                onSubtitlesClick = { activeDetailType = PlayerDetailType.SUBTITLES },
+                isFullscreen = isFullscreen,
+                onFullscreenClick = {
+                    isFullscreen = !isFullscreen
+                    activity?.let { act ->
+                        val window = act.window
+                        val decorView = window.decorView
+                        if (!isFullscreen) {
+                            // Exit fullscreen: restore system UI
+                            @Suppress("DEPRECATION")
+                            decorView.systemUiVisibility = android.view.View.SYSTEM_UI_FLAG_VISIBLE
+                            act.requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+                        } else {
+                            // Enter fullscreen: hide system UI
+                            @Suppress("DEPRECATION")
+                            decorView.systemUiVisibility = (
+                                android.view.View.SYSTEM_UI_FLAG_FULLSCREEN
+                                or android.view.View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                                or android.view.View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                            )
+                            act.requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                        }
                     }
                 }
             )
@@ -297,14 +362,35 @@ fun PlayerScreen(
                 }
             }
 
-            if (showSettingsSheet) {
-                PlaybackSettingsBottomSheet(
+            // Buffering indicator — shown for online videos during initial load and rebuffering
+            if (isBuffering && uiState.video?.type == com.shaaztechno.videoplayer.domain.model.VideoType.ONLINE) {
+                Column(
+                    modifier = Modifier.align(Alignment.Center),
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    CircularProgressIndicator(
+                        color = ElectricGreen,
+                        strokeWidth = 3.dp,
+                        modifier = Modifier.size(52.dp)
+                    )
+                    Spacer(Modifier.height(12.dp))
+                    Text(
+                        text = "Buffering…",
+                        color = Color.White.copy(alpha = 0.85f),
+                        style = MaterialTheme.typography.labelLarge
+                    )
+                }
+            }
+
+            activeDetailType?.let { detailType ->
+                PlaybackDetailDialog(
+                    type = detailType,
                     player = exoPlayer,
                     currentSpeed = playbackSpeed,
                     currentResizeMode = resizeMode,
                     onSpeedChange = { playbackSpeed = it },
                     onResizeModeChange = { resizeMode = it },
-                    onDismiss = { showSettingsSheet = false }
+                    onDismiss = { activeDetailType = null }
                 )
             }
         }
@@ -321,8 +407,12 @@ fun PlayerControls(
     onPipClick: () -> Unit,
     onShareClick: () -> Unit,
     isVisible: Boolean,
-    onSettingsClick: () -> Unit,
-    onResizeModeChange: () -> Unit
+    onSpeedClick: () -> Unit,
+    onAspectClick: () -> Unit,
+    onAudioClick: () -> Unit,
+    onSubtitlesClick: () -> Unit,
+    isFullscreen: Boolean = true,
+    onFullscreenClick: () -> Unit = {}
 ) {
     Box(modifier = Modifier.fillMaxSize()) {
         if (isVisible) {
@@ -358,8 +448,12 @@ fun PlayerControls(
                         modifier = Modifier.weight(1f),
                         maxLines = 1
                     )
-                    IconButton(onClick = onResizeModeChange) {
-                        Icon(Icons.Rounded.AspectRatio, contentDescription = "Aspect Ratio", tint = Color.White)
+                    IconButton(onClick = onFullscreenClick) {
+                        Icon(
+                            imageVector = if (isFullscreen) Icons.Rounded.Fullscreen else Icons.Rounded.FullscreenExit,
+                            contentDescription = if (isFullscreen) "Fullscreen" else "Exit Fullscreen",
+                            tint = Color.White
+                        )
                     }
                     IconButton(onClick = onPipClick) {
                         Icon(Icons.Rounded.PictureInPicture, contentDescription = "PiP", tint = Color.White)
@@ -367,8 +461,8 @@ fun PlayerControls(
                     IconButton(onClick = onShareClick) {
                         Icon(Icons.Rounded.Share, contentDescription = "Share", tint = Color.White)
                     }
-                    IconButton(onClick = onSettingsClick) {
-                        Icon(Icons.Rounded.Settings, contentDescription = "Settings", tint = Color.White)
+                    IconButton(onClick = onSpeedClick) {
+                        Icon(Icons.Rounded.Speed, contentDescription = "Speed", tint = Color.White)
                     }
                 }
 
@@ -410,11 +504,11 @@ fun PlayerControls(
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .height(150.dp)
+                        .height(160.dp)
                         .align(Alignment.BottomCenter)
                         .background(
                             brush = Brush.verticalGradient(
-                                colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.8f))
+                                colors = listOf(Color.Transparent, Color.Black.copy(alpha = 0.85f))
                             )
                         )
                 )
@@ -465,6 +559,7 @@ fun PlayerControls(
                         )
                     }
 
+                    // Time Display
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -475,28 +570,59 @@ fun PlayerControls(
                             color = Color.White,
                             style = MaterialTheme.typography.labelMedium
                         )
-                        
-                        // Playback Speed Button (Quick access)
-                        Button(
-                            onClick = onSettingsClick,
-                            colors = ButtonDefaults.buttonColors(
-                                containerColor = Color.White.copy(alpha = 0.1f),
-                                contentColor = ElectricGreen
-                            ),
-                            contentPadding = PaddingValues(horizontal = 12.dp, vertical = 4.dp),
-                            modifier = Modifier.height(32.dp),
-                            shape = MaterialTheme.shapes.small
-                        ) {
-                            Icon(Icons.Rounded.Speed, contentDescription = null, modifier = Modifier.size(16.dp))
-                            Spacer(Modifier.width(4.dp))
-                            Text(
-                                text = "${"%.2f".format(player.playbackParameters.speed)}x",
-                                style = MaterialTheme.typography.labelMedium,
-                                fontWeight = FontWeight.Bold
-                            )
-                        }
                     }
-                    Spacer(modifier = Modifier.height(32.dp)) // Space for lock button
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    // Individual Functionality Buttons with Icons & Labels
+                    Row(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .horizontalScroll(rememberScrollState()),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        var currentSpeed by remember { mutableFloatStateOf(player.playbackParameters.speed) }
+                        DisposableEffect(player) {
+                            val listener = object : Player.Listener {
+                                override fun onPlaybackParametersChanged(playbackParameters: androidx.media3.common.PlaybackParameters) {
+                                    currentSpeed = playbackParameters.speed
+                                }
+                            }
+                            player.addListener(listener)
+                            onDispose { player.removeListener(listener) }
+                        }
+
+                        // Speed Label with Icon
+                        PlayerActionButton(
+                            icon = Icons.Rounded.Speed,
+                            label = if (currentSpeed == 1f) "Speed" else "${"%.2f".format(currentSpeed).trimEnd('0').trimEnd('.')}x",
+                            onClick = onSpeedClick
+                        )
+
+                        // Aspect Label with Icon
+                        PlayerActionButton(
+                            icon = Icons.Rounded.AspectRatio,
+                            label = "Aspect",
+                            onClick = onAspectClick
+                        )
+
+                        // Audio Label with Icon
+                        PlayerActionButton(
+                            icon = Icons.Rounded.Audiotrack,
+                            label = "Audio",
+                            onClick = onAudioClick
+                        )
+
+                        // Subtitles Label with Icon
+                        PlayerActionButton(
+                            icon = Icons.Rounded.Subtitles,
+                            label = "Subtitles",
+                            onClick = onSubtitlesClick
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.height(8.dp))
                 }
             }
 
@@ -504,8 +630,8 @@ fun PlayerControls(
             IconButton(
                 onClick = onLockToggle,
                 modifier = Modifier
-                    .align(Alignment.BottomStart)
-                    .padding(16.dp)
+                    .align(Alignment.CenterStart)
+                    .padding(start = 16.dp)
             ) {
                 Icon(
                     if (isLocked) Icons.Rounded.Lock else Icons.Rounded.LockOpen,
@@ -540,9 +666,53 @@ fun PlayerControls(
     }
 }
 
+@Composable
+fun PlayerActionButton(
+    icon: ImageVector,
+    label: String,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    Surface(
+        onClick = onClick,
+        shape = MaterialTheme.shapes.small,
+        color = Color.White.copy(alpha = 0.12f),
+        contentColor = Color.White,
+        modifier = modifier.height(32.dp)
+    ) {
+        Row(
+            modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp),
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.Center
+        ) {
+            Icon(
+                imageVector = icon,
+                contentDescription = label,
+                tint = ElectricGreen,
+                modifier = Modifier.size(16.dp)
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold,
+                color = Color.White
+            )
+        }
+    }
+}
+
+enum class PlayerDetailType {
+    SPEED,
+    ASPECT,
+    AUDIO,
+    SUBTITLES
+}
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun PlaybackSettingsBottomSheet(
+fun PlaybackDetailBottomSheet(
+    type: PlayerDetailType,
     player: Player,
     currentSpeed: Float,
     currentResizeMode: Int,
@@ -551,12 +721,11 @@ fun PlaybackSettingsBottomSheet(
     onDismiss: () -> Unit
 ) {
     val sheetState = rememberModalBottomSheetState()
-    var selectedTab by remember { mutableIntStateOf(0) }
     
     ModalBottomSheet(
         onDismissRequest = onDismiss,
         sheetState = sheetState,
-        containerColor = Color(0xFF121212),
+        containerColor = Color(0xFF161616),
         contentColor = Color.White,
         dragHandle = { BottomSheetDefaults.DragHandle(color = Color.DarkGray) }
     ) {
@@ -565,41 +734,149 @@ fun PlaybackSettingsBottomSheet(
                 .fillMaxWidth()
                 .padding(bottom = 32.dp)
         ) {
-            TabRow(
-                selectedTabIndex = selectedTab,
-                containerColor = Color.Transparent,
-                contentColor = ElectricGreen,
-                indicator = { tabPositions ->
-                    if (selectedTab < tabPositions.size) {
-                        TabRowDefaults.Indicator(
-                            Modifier.tabIndicatorOffset(tabPositions[selectedTab]),
-                            color = ElectricGreen
-                        )
-                    }
-                },
-                divider = {}
+            // Header with Icon, Title, and Close Button
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(horizontal = 20.dp, vertical = 8.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.SpaceBetween
             ) {
-                Tab(selected = selectedTab == 0, onClick = { selectedTab = 0 }) {
-                    Text("Speed", modifier = Modifier.padding(16.dp), fontWeight = FontWeight.Bold)
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
+                    Icon(
+                        imageVector = when (type) {
+                            PlayerDetailType.SPEED -> Icons.Rounded.Speed
+                            PlayerDetailType.ASPECT -> Icons.Rounded.AspectRatio
+                            PlayerDetailType.AUDIO -> Icons.Rounded.Audiotrack
+                            PlayerDetailType.SUBTITLES -> Icons.Rounded.Subtitles
+                        },
+                        contentDescription = null,
+                        tint = ElectricGreen,
+                        modifier = Modifier.size(24.dp)
+                    )
+                    Text(
+                        text = when (type) {
+                            PlayerDetailType.SPEED -> "Playback Speed"
+                            PlayerDetailType.ASPECT -> "Aspect Ratio"
+                            PlayerDetailType.AUDIO -> "Audio Track"
+                            PlayerDetailType.SUBTITLES -> "Subtitles"
+                        },
+                        style = MaterialTheme.typography.titleLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = Color.White
+                    )
                 }
-                Tab(selected = selectedTab == 1, onClick = { selectedTab = 1 }) {
-                    Text("Aspect", modifier = Modifier.padding(16.dp), fontWeight = FontWeight.Bold)
-                }
-                Tab(selected = selectedTab == 2, onClick = { selectedTab = 2 }) {
-                    Text("Audio", modifier = Modifier.padding(16.dp), fontWeight = FontWeight.Bold)
-                }
-                Tab(selected = selectedTab == 3, onClick = { selectedTab = 3 }) {
-                    Text("Subs", modifier = Modifier.padding(16.dp), fontWeight = FontWeight.Bold)
+                IconButton(onClick = onDismiss) {
+                    Icon(Icons.Rounded.Close, contentDescription = "Close", tint = Color.LightGray)
                 }
             }
 
-            Spacer(Modifier.height(16.dp))
+            Divider(
+                modifier = Modifier.padding(horizontal = 16.dp, vertical = 8.dp),
+                color = Color.White.copy(alpha = 0.1f)
+            )
 
-            when (selectedTab) {
-                0 -> SpeedSettings(currentSpeed, onSpeedChange)
-                1 -> AspectSettings(currentResizeMode, onResizeModeChange)
-                2 -> TrackSettings(player, C.TRACK_TYPE_AUDIO)
-                3 -> TrackSettings(player, C.TRACK_TYPE_TEXT)
+            // Content according to the label clicked
+            when (type) {
+                PlayerDetailType.SPEED -> SpeedSettings(currentSpeed, onSpeedChange)
+                PlayerDetailType.ASPECT -> AspectSettings(currentResizeMode, onResizeModeChange)
+                PlayerDetailType.AUDIO -> TrackSettings(player, C.TRACK_TYPE_AUDIO)
+                PlayerDetailType.SUBTITLES -> TrackSettings(player, C.TRACK_TYPE_TEXT)
+            }
+        }
+    }
+}
+
+@Composable
+fun PlaybackDetailDialog(
+    type: PlayerDetailType,
+    player: Player,
+    currentSpeed: Float,
+    currentResizeMode: Int,
+    onSpeedChange: (Float) -> Unit,
+    onResizeModeChange: (Int) -> Unit,
+    onDismiss: () -> Unit
+) {
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(
+            dismissOnBackPress = true,
+            dismissOnClickOutside = true,
+            usePlatformDefaultWidth = false
+        )
+    ) {
+        Surface(
+            shape = RoundedCornerShape(16.dp),
+            color = Color(0xFF1A1A1A),
+            tonalElevation = 8.dp,
+            modifier = Modifier
+                .fillMaxWidth(0.9f)
+                .wrapContentHeight()
+        ) {
+            Column(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .padding(bottom = 16.dp)
+            ) {
+                // Header
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(horizontal = 20.dp, vertical = 16.dp),
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.SpaceBetween
+                ) {
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    ) {
+                        Icon(
+                            imageVector = when (type) {
+                                PlayerDetailType.SPEED -> Icons.Rounded.Speed
+                                PlayerDetailType.ASPECT -> Icons.Rounded.AspectRatio
+                                PlayerDetailType.AUDIO -> Icons.Rounded.Audiotrack
+                                PlayerDetailType.SUBTITLES -> Icons.Rounded.Subtitles
+                            },
+                            contentDescription = null,
+                            tint = ElectricGreen,
+                            modifier = Modifier.size(24.dp)
+                        )
+                        Text(
+                            text = when (type) {
+                                PlayerDetailType.SPEED -> "Playback Speed"
+                                PlayerDetailType.ASPECT -> "Aspect Ratio"
+                                PlayerDetailType.AUDIO -> "Audio Track"
+                                PlayerDetailType.SUBTITLES -> "Subtitles"
+                            },
+                            style = MaterialTheme.typography.titleLarge,
+                            fontWeight = FontWeight.Bold,
+                            color = Color.White
+                        )
+                    }
+                    IconButton(onClick = onDismiss) {
+                        Icon(Icons.Rounded.Close, contentDescription = "Close", tint = Color.LightGray)
+                    }
+                }
+
+                Divider(
+                    modifier = Modifier.padding(horizontal = 16.dp),
+                    color = Color.White.copy(alpha = 0.1f)
+                )
+
+                Spacer(modifier = Modifier.height(4.dp))
+
+                // Content
+                when (type) {
+                    PlayerDetailType.SPEED -> SpeedSettings(currentSpeed, onSpeedChange)
+                    PlayerDetailType.ASPECT -> AspectSettings(currentResizeMode, onResizeModeChange)
+                    PlayerDetailType.AUDIO -> TrackSettings(player, C.TRACK_TYPE_AUDIO)
+                    PlayerDetailType.SUBTITLES -> TrackSettings(player, C.TRACK_TYPE_TEXT)
+                }
+
+                Spacer(modifier = Modifier.height(8.dp))
             }
         }
     }
@@ -610,8 +887,9 @@ fun SpeedSettings(currentSpeed: Float, onSpeedChange: (Float) -> Unit) {
     val speeds = listOf(0.25f, 0.5f, 0.75f, 1.0f, 1.25f, 1.5f, 1.75f, 2.0f)
     LazyColumn {
         items(speeds) { speed ->
+            val label = if (speed == 1.0f) "1.0x (Normal)" else "${speed}x"
             SettingsItem(
-                text = "${speed}x",
+                text = label,
                 isSelected = currentSpeed == speed,
                 onClick = { onSpeedChange(speed) }
             )
@@ -622,9 +900,9 @@ fun SpeedSettings(currentSpeed: Float, onSpeedChange: (Float) -> Unit) {
 @Composable
 fun AspectSettings(currentMode: Int, onResizeModeChange: (Int) -> Unit) {
     val modes = listOf(
-        AspectRatioFrameLayout.RESIZE_MODE_FIT to "Fit",
-        AspectRatioFrameLayout.RESIZE_MODE_FILL to "Stretch",
-        AspectRatioFrameLayout.RESIZE_MODE_ZOOM to "Crop",
+        AspectRatioFrameLayout.RESIZE_MODE_FIT to "Fit (Original Aspect)",
+        AspectRatioFrameLayout.RESIZE_MODE_FILL to "Stretch (Fill Screen)",
+        AspectRatioFrameLayout.RESIZE_MODE_ZOOM to "Crop (Zoom to Fill)",
         AspectRatioFrameLayout.RESIZE_MODE_FIXED_WIDTH to "Fixed Width",
         AspectRatioFrameLayout.RESIZE_MODE_FIXED_HEIGHT to "Fixed Height"
     )
@@ -641,43 +919,87 @@ fun AspectSettings(currentMode: Int, onResizeModeChange: (Int) -> Unit) {
 
 @Composable
 fun TrackSettings(player: Player, trackType: Int) {
-    val tracks = player.currentTracks
-    val trackGroups = mutableListOf<Tracks.Group>()
-    
-    for (group in tracks.groups) {
-        if (group.type == trackType) {
-            trackGroups.add(group)
+    var currentTracks by remember { mutableStateOf(player.currentTracks) }
+    var trackParameters by remember { mutableStateOf(player.trackSelectionParameters) }
+
+    DisposableEffect(player) {
+        val listener = object : Player.Listener {
+            override fun onTracksChanged(tracks: Tracks) {
+                currentTracks = tracks
+            }
+            override fun onTrackSelectionParametersChanged(parameters: androidx.media3.common.TrackSelectionParameters) {
+                trackParameters = parameters
+            }
         }
+        player.addListener(listener)
+        onDispose { player.removeListener(listener) }
+    }
+
+    val trackGroups = remember(currentTracks, trackType) {
+        val list = mutableListOf<Tracks.Group>()
+        for (group in currentTracks.groups) {
+            if (group.type == trackType) {
+                list.add(group)
+            }
+        }
+        list
     }
 
     if (trackGroups.isEmpty()) {
-        Box(Modifier.fillMaxWidth().padding(32.dp), contentAlignment = Alignment.Center) {
-            Text("No tracks available", color = Color.Gray)
+        Box(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(32.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Text(
+                text = if (trackType == C.TRACK_TYPE_AUDIO) "No audio tracks available" else "No subtitles available",
+                color = Color.Gray
+            )
         }
     } else {
+        val isTextTrack = trackType == C.TRACK_TYPE_TEXT
+        val isSubtitlesDisabled = trackParameters.disabledTrackTypes.contains(C.TRACK_TYPE_TEXT)
+        val hasOverride = hasSelectionOverride(player, trackType)
+
         LazyColumn {
             item {
                 SettingsItem(
-                    text = if (trackType == C.TRACK_TYPE_TEXT) "Off" else "Default",
-                    isSelected = !hasSelectionOverride(player, trackType),
+                    text = if (isTextTrack) "Off" else "Default",
+                    isSelected = if (isTextTrack) isSubtitlesDisabled else !hasOverride,
                     onClick = {
-                        player.trackSelectionParameters = player.trackSelectionParameters
-                            .buildUpon()
-                            .clearOverridesOfType(trackType)
-                            .build()
+                        if (isTextTrack) {
+                            player.trackSelectionParameters = player.trackSelectionParameters
+                                .buildUpon()
+                                .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
+                                .clearOverridesOfType(C.TRACK_TYPE_TEXT)
+                                .build()
+                        } else {
+                            player.trackSelectionParameters = player.trackSelectionParameters
+                                .buildUpon()
+                                .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, false)
+                                .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
+                                .build()
+                        }
                     }
                 )
             }
             items(trackGroups) { group ->
                 for (i in 0 until group.length) {
                     val format = group.getTrackFormat(i)
-                    val label = format.language ?: format.label ?: "Track ${i + 1}"
+                    val label = formatTrackLabel(format, i)
+                    val isSelected = if (isTextTrack) {
+                        !isSubtitlesDisabled && group.isTrackSelected(i)
+                    } else {
+                        group.isTrackSelected(i)
+                    }
                     SettingsItem(
                         text = label,
-                        isSelected = group.isTrackSelected(i),
+                        isSelected = isSelected,
                         onClick = {
                             player.trackSelectionParameters = player.trackSelectionParameters
                                 .buildUpon()
+                                .setTrackTypeDisabled(trackType, false)
                                 .setOverrideForType(
                                     androidx.media3.common.TrackSelectionOverride(group.mediaTrackGroup, i)
                                 )
@@ -687,6 +1009,25 @@ fun TrackSettings(player: Player, trackType: Int) {
                 }
             }
         }
+    }
+}
+
+private fun formatTrackLabel(format: androidx.media3.common.Format, index: Int): String {
+    val lang = format.language
+    val displayLanguage = if (!lang.isNullOrBlank()) {
+        try {
+            java.util.Locale.forLanguageTag(lang).getDisplayLanguage(java.util.Locale.getDefault()).takeIf { it.isNotBlank() } ?: lang
+        } catch (_: Exception) {
+            lang
+        }
+    } else null
+
+    val label = format.label
+    return when {
+        !label.isNullOrBlank() && !displayLanguage.isNullOrBlank() && !label.equals(displayLanguage, ignoreCase = true) -> "$displayLanguage ($label)"
+        !displayLanguage.isNullOrBlank() -> displayLanguage
+        !label.isNullOrBlank() -> label
+        else -> "Track ${index + 1}"
     }
 }
 
