@@ -37,8 +37,11 @@ import com.shaaztechno.videoplayer.presentation.addvideo.AddVideoScreen
 import com.shaaztechno.videoplayer.presentation.addvideo.AddVideoViewModel
 import com.shaaztechno.videoplayer.presentation.downloads.DownloadsScreen
 import com.shaaztechno.videoplayer.presentation.downloads.DownloadsViewModel
+import com.shaaztechno.videoplayer.presentation.home.ContinueWatchingScreen
 import com.shaaztechno.videoplayer.presentation.home.HomeScreen
 import com.shaaztechno.videoplayer.presentation.home.HomeViewModel
+import com.shaaztechno.videoplayer.presentation.instagram.InstagramScreen
+import com.shaaztechno.videoplayer.presentation.instagram.InstagramViewModel
 import com.shaaztechno.videoplayer.presentation.library.LibraryScreen
 import com.shaaztechno.videoplayer.presentation.library.LibraryViewModel
 import com.shaaztechno.videoplayer.presentation.navigation.Screen
@@ -135,7 +138,9 @@ fun MainScreen() {
     val showBottomBar = currentDestination?.route != Screen.Player.route &&
                          currentDestination?.route != Screen.AddVideo.route &&
                          currentDestination?.route != Screen.VideoUrl.route &&
-                         currentDestination?.route != Screen.Search.route
+                         currentDestination?.route != Screen.Instagram.route &&
+                         currentDestination?.route != Screen.Search.route &&
+                         currentDestination?.route != Screen.ContinueWatching.route
 
     Scaffold(
         bottomBar = {
@@ -228,6 +233,25 @@ fun MainScreen() {
                             launchSingleTop = true
                             restoreState = true
                         }
+                    },
+                    onNavigateToContinueWatching = {
+                        navController.navigate(Screen.ContinueWatching.route)
+                    }
+                )
+            }
+            composable(Screen.ContinueWatching.route) {
+                val app = context.applicationContext as SZPlayerApplication
+                val viewModel: HomeViewModel = viewModel(factory = HomeViewModel.Factory(app.videoRepository, app.database.playlistDao()))
+                ContinueWatchingScreen(
+                    viewModel = viewModel,
+                    onVideoClick = { video ->
+                        navController.navigate(Screen.Player.createRoute(video.id))
+                    },
+                    onBackClick = {
+                        navController.popBackStack()
+                    },
+                    onShareClick = { video ->
+                        activity?.shareVideo(video)
                     }
                 )
             }
@@ -309,6 +333,9 @@ fun MainScreen() {
                     },
                     onNavigateToUrlScreen = {
                         navController.navigate(Screen.VideoUrl.route)
+                    },
+                    onNavigateToInstagram = {
+                        navController.navigate(Screen.Instagram.route)
                     }
                 )
             }
@@ -340,6 +367,24 @@ fun MainScreen() {
                     }
                 )
             }
+            composable(Screen.Instagram.route) {
+                val app = context.applicationContext as SZPlayerApplication
+                val viewModel: InstagramViewModel = viewModel(
+                    factory = InstagramViewModel.Factory(
+                        app.getInstagramReelUseCase,
+                        app.szDownloadManager
+                    )
+                )
+                InstagramScreen(
+                    viewModel = viewModel,
+                    onNavigateBack = { navController.popBackStack() },
+                    onOpenVideo = { videoId ->
+                        navController.navigate(Screen.Player.createRoute(videoId)) {
+                            popUpTo(Screen.Instagram.route) { inclusive = true }
+                        }
+                    }
+                )
+            }
             composable(Screen.Search.route) {
                 val app = context.applicationContext as SZPlayerApplication
                 val viewModel: SearchViewModel = viewModel(factory = SearchViewModel.Factory(app.videoRepository))
@@ -357,7 +402,7 @@ fun MainScreen() {
             composable(Screen.Player.route) { backStackEntry ->
                 val videoId = backStackEntry.arguments?.getString("videoId") ?: return@composable
                 PlayerScreen(
-                    videoId = videoId, 
+                    videoId = videoId,
                     onBack = { navController.popBackStack() },
                     onPipClick = { activity?.enterPipMode() },
                     onShareClick = { video ->

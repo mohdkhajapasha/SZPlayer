@@ -14,6 +14,7 @@ import com.shaaztechno.videoplayer.domain.repository.VideoRepository
 import com.shaaztechno.videoplayer.util.Config
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 
@@ -136,18 +137,29 @@ class VideoRepositoryImpl(
         position: Long,
         duration: Long
     ) {
-        historyDao.insertHistory(
-            HistoryEntity(
-                videoId = video.id,
-                title = video.title,
-                url = video.url,
-                type = video.type.name,
-                thumbnailUrl = video.thumbnailUrl,
-                lastPosition = position,
-                duration = duration,
-                timestamp = System.currentTimeMillis()
+        withContext(Dispatchers.IO) {
+            historyDao.insertHistory(
+                HistoryEntity(
+                    videoId = video.id,
+                    title = video.title,
+                    url = video.url,
+                    type = video.type.name,
+                    thumbnailUrl = video.thumbnailUrl,
+                    lastPosition = position,
+                    duration = duration,
+                    timestamp = System.currentTimeMillis()
+                )
             )
-        )
+
+            // Limit history to 10 records
+            val history = historyDao.getHistory().first()
+            if (history.size > 10) {
+                val recordsToDelete = history.drop(10)
+                recordsToDelete.forEach {
+                    historyDao.deleteHistory(it.videoId)
+                }
+            }
+        }
     }
 
     override suspend fun clearHistory() {

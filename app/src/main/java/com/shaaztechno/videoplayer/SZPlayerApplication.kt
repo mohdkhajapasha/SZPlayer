@@ -9,6 +9,9 @@ import com.shaaztechno.videoplayer.data.local.SettingsDataStore
 import com.shaaztechno.videoplayer.data.remote.GoogleSheetParser
 import com.shaaztechno.videoplayer.data.repository.VideoRepositoryImpl
 import com.shaaztechno.videoplayer.data.downloader.VideoDownloader
+import com.shaaztechno.videoplayer.data.remote.InstagramMediaExtractor
+import com.shaaztechno.videoplayer.data.repository.InstagramRepositoryImpl
+import com.shaaztechno.videoplayer.domain.usecase.GetInstagramReelUseCase
 import okhttp3.OkHttpClient
 
 class SZPlayerApplication : Application(), ImageLoaderFactory {
@@ -51,6 +54,11 @@ class SZPlayerApplication : Application(), ImageLoaderFactory {
     val checkVideoUrlUseCase by lazy {
         com.shaaztechno.videoplayer.domain.usecase.CheckVideoUrlUseCase(videoUrlRepository)
     }
+
+    // Instagram Reel Feature DI
+    private val instagramMediaExtractor by lazy { InstagramMediaExtractor(httpClient) }
+    val instagramRepository by lazy { InstagramRepositoryImpl(instagramMediaExtractor) }
+    val getInstagramReelUseCase by lazy { GetInstagramReelUseCase(instagramRepository) }
 
     override fun onCreate() {
         super.onCreate()

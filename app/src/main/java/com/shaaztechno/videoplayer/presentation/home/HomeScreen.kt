@@ -52,7 +52,8 @@ fun HomeScreen(
     onShareClick: (Video) -> Unit,
     onNavigateToLibrary: () -> Unit = {},
     onNavigateToPlaylists: () -> Unit = {},
-    onNavigateToSettings: () -> Unit = {}
+    onNavigateToSettings: () -> Unit = {},
+    onNavigateToContinueWatching: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
@@ -168,8 +169,8 @@ fun HomeScreen(
             item {
                 SectionHeader(
                     title = "Continue Watching",
-                    showViewAll = true,
-                    onViewAllClick = onNavigateToLibrary
+                    showViewAll = false,
+                    onViewAllClick = onNavigateToContinueWatching
                 )
                 val activeHistory = uiState.recentlyPlayed.firstOrNull()
                 ContinueWatchingCard(
@@ -192,7 +193,7 @@ fun HomeScreen(
                 SectionHeader(
                     title = "Recently Played",
                     showViewAll = true,
-                    onViewAllClick = onNavigateToLibrary
+                    onViewAllClick = onNavigateToContinueWatching
                 )
                 val historyList = if (uiState.recentlyPlayed.size > 1) {
                     uiState.recentlyPlayed.drop(1)
@@ -206,11 +207,13 @@ fun HomeScreen(
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
                         items(historyList) { history ->
+                            val progress = if (history.duration > 0) history.lastPosition.toFloat() / history.duration else 0f
                             RecentVideoCard(
                                 title = history.title,
                                 durationText = formatDuration(history.duration),
                                 dateText = formatRelativeDate(history.timestamp),
                                 thumbnailUrl = history.thumbnailUrl ?: history.url,
+                                progress = progress,
                                 onClick = { onVideoClick(history.toVideo()) }
                             )
                         }
@@ -407,8 +410,10 @@ fun HomeScreen(
                     SectionHeader(title = "Online Catalog", showViewAll = false)
                 }
                 items(uiState.onlineVideos) { video ->
+                    val progress = uiState.historyMap[video.id] ?: 0f
                     VideoListItem(
                         video = video,
+                        progress = progress,
                         onClick = { onVideoClick(video) },
                         onShare = { onShareClick(video) }
                     )
@@ -662,6 +667,7 @@ fun RecentVideoCard(
     durationText: String,
     dateText: String,
     thumbnailUrl: String,
+    progress: Float = 0f,
     onClick: () -> Unit
 ) {
     Column(
@@ -697,6 +703,19 @@ fun RecentVideoCard(
                         fontWeight = FontWeight.Bold,
                         fontSize = 10.sp
                     )
+                )
+            }
+            
+            // Progress Bar at the bottom of the thumbnail
+            if (progress > 0) {
+                LinearProgressIndicator(
+                    progress = progress,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(3.dp)
+                        .align(Alignment.BottomCenter),
+                    color = ElectricGreen,
+                    trackColor = Color.Transparent
                 )
             }
         }
@@ -993,6 +1012,7 @@ fun ThemedFolderCard(
 @Composable
 fun VideoListItem(
     video: Video,
+    progress: Float = 0f,
     onClick: () -> Unit,
     onShare: () -> Unit = {}
 ) {
@@ -1003,14 +1023,31 @@ fun VideoListItem(
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        AsyncImage(
-            model = video.thumbnailUrl ?: video.url,
-            contentDescription = null,
-            modifier = Modifier
-                .size(64.dp)
-                .clip(RoundedCornerShape(12.dp)),
-            contentScale = ContentScale.Crop
-        )
+        Box(modifier = Modifier.size(64.dp)) {
+            AsyncImage(
+                model = video.thumbnailUrl ?: video.url,
+                contentDescription = null,
+                modifier = Modifier
+                    .fillMaxSize()
+                    .clip(RoundedCornerShape(12.dp)),
+                contentScale = ContentScale.Crop
+            )
+            
+            if (progress > 0) {
+                LinearProgressIndicator(
+                    progress = progress,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(3.dp)
+                        .align(Alignment.BottomCenter)
+                        .padding(horizontal = 4.dp, vertical = 2.dp)
+                        .clip(RoundedCornerShape(2.dp)),
+                    color = ElectricGreen,
+                    trackColor = Color.White.copy(alpha = 0.2f)
+                )
+            }
+        }
+
         Spacer(modifier = Modifier.width(14.dp))
         Column(modifier = Modifier.weight(1f)) {
             Text(

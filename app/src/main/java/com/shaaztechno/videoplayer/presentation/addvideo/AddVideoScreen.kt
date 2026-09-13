@@ -13,6 +13,7 @@ import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Link
+import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.VideoLibrary
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -37,7 +38,8 @@ fun AddVideoScreen(
     viewModel: AddVideoViewModel,
     onBack: () -> Unit,
     onBrowseDeviceVideos: () -> Unit,
-    onNavigateToUrlScreen: () -> Unit
+    onNavigateToUrlScreen: () -> Unit,
+    onNavigateToInstagram: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
@@ -78,10 +80,10 @@ fun AddVideoScreen(
                 )
             )
         }
-    ) { padding ->
+    ) { paddingValues ->
         Column(
             modifier = Modifier
-                .padding(padding)
+                .padding(paddingValues)
                 .fillMaxSize()
                 .background(Color.Black)
                 .padding(horizontal = 20.dp, vertical = 20.dp),
@@ -112,9 +114,17 @@ fun AddVideoScreen(
                 onClick = onNavigateToUrlScreen
             )
 
+            // Option 3: Instagram Reel Card
+            AddVideoOptionCard(
+                title = "Instagram Reel",
+                subtitle = "Download public Instagram Reels",
+                icon = Icons.Default.Movie,
+                onClick = onNavigateToInstagram
+            )
+
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Option 3: Browse Device Library
+            // Option 4: Browse Device Library
             Card(
                 modifier = Modifier
                     .fillMaxWidth()

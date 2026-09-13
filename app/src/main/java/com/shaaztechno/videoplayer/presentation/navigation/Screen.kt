@@ -11,7 +11,9 @@ sealed class Screen(val route: String) {
     object Settings : Screen("settings")
     object AddVideo : Screen("add_video")
     object VideoUrl : Screen("video_url")
+    object Instagram : Screen("instagram")
     object Search : Screen("search")
+    object ContinueWatching : Screen("continue_watching")
     object Player : Screen("player/{videoId}") {
         fun createRoute(videoId: String) = "player/$videoId"
     }

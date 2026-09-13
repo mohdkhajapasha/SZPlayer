@@ -174,7 +174,7 @@ fun LibraryScreen(
                         items(uiState.videos) { video ->
                             Box {
                                 VideoListItem(
-                                    video = video, 
+                                    video = video,
                                     onClick = { onVideoClick(video) },
                                     onShare = { activeMenuVideo = video }
                                 )

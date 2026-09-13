@@ -12,6 +12,7 @@ import com.shaaztechno.videoplayer.domain.repository.VideoRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.launch
 
 class LibraryViewModel(
@@ -26,15 +27,20 @@ class LibraryViewModel(
 
     init {
         viewModelScope.launch {
-            repository.getVideosByType(VideoType.LOCAL).collect { videos ->
+            combine(
+                repository.getVideosByType(VideoType.LOCAL),
+                repository.getPlaybackHistory(),
+                playlistDao.getAllPlaylists()
+            ) { videos, history, playlists ->
                 allLocalVideos = videos
+                val historyMap = history.associate { it.videoId to if (it.duration > 0) it.lastPosition.toFloat() / it.duration else 0f }
+
+                _uiState.value = _uiState.value.copy(
+                    playlists = playlists,
+                    historyMap = historyMap
+                )
                 updateSortedVideos()
-            }
-        }
-        viewModelScope.launch {
-            playlistDao.getAllPlaylists().collect { playlists ->
-                _uiState.value = _uiState.value.copy(playlists = playlists)
-            }
+            }.collect {}
         }
     }
 
@@ -119,6 +125,7 @@ data class LibraryUiState(
     val videos: List<Video> = emptyList(),
     val folders: Map<String, List<Video>> = emptyMap(),
     val playlists: List<PlaylistEntity> = emptyList(),
+    val historyMap: Map<String, Float> = emptyMap(),
     val isFolderView: Boolean = true,
     val sortOrder: SortOrder = SortOrder.NAME,
     val isLoading: Boolean = true

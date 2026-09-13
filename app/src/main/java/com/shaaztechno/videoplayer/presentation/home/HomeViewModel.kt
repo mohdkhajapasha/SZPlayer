@@ -34,10 +34,12 @@ class HomeViewModel(
                 playlistsFlow
             ) { online, local, history, playlists ->
                 val foldersMap = local.groupBy { it.folder ?: "Internal Storage" }
+                val historyMap = history.associate { it.videoId to if (it.duration > 0) it.lastPosition.toFloat() / it.duration else 0f }
                 HomeUiState(
                     onlineVideos = online,
                     localVideos = local,
                     recentlyPlayed = history,
+                    historyMap = historyMap,
                     playlists = playlists,
                     folders = foldersMap,
                     isLoading = false
@@ -73,9 +75,9 @@ data class HomeUiState(
     val onlineVideos: List<Video> = emptyList(),
     val localVideos: List<Video> = emptyList(),
     val recentlyPlayed: List<HistoryEntity> = emptyList(),
+    val historyMap: Map<String, Float> = emptyMap(),
     val playlists: List<PlaylistEntity> = emptyList(),
     val folders: Map<String, List<Video>> = emptyMap(),
     val isLoading: Boolean = true,
     val error: String? = null
 )
-
