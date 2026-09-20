@@ -2,9 +2,11 @@ package com.shaaztechno.videoplayer
 
 import android.app.PictureInPictureParams
 import android.content.Intent
+import android.net.Uri
 import android.os.Build
 import android.os.Bundle
 import android.util.Rational
+import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
 import androidx.compose.foundation.layout.fillMaxSize
@@ -18,7 +20,9 @@ import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
@@ -33,6 +37,7 @@ import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import com.shaaztechno.videoplayer.domain.model.Video
+import com.shaaztechno.videoplayer.domain.model.VideoType
 import com.shaaztechno.videoplayer.presentation.addvideo.AddVideoScreen
 import com.shaaztechno.videoplayer.presentation.addvideo.AddVideoViewModel
 import com.shaaztechno.videoplayer.presentation.downloads.DownloadsScreen
@@ -56,19 +61,18 @@ import com.shaaztechno.videoplayer.presentation.settings.SettingsScreen
 import com.shaaztechno.videoplayer.presentation.settings.SettingsViewModel
 import com.shaaztechno.videoplayer.presentation.videourl.VideoUrlScreen
 import com.shaaztechno.videoplayer.presentation.videourl.VideoUrlViewModel
+import com.shaaztechno.videoplayer.presentation.whatsapp.StatusPreviewScreen
+import com.shaaztechno.videoplayer.presentation.whatsapp.WhatsAppStatusScreen
+import com.shaaztechno.videoplayer.presentation.whatsapp.WhatsAppStatusViewModel
 import com.shaaztechno.videoplayer.ui.theme.SZPlayerTheme
-import java.util.Locale
 
 class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
-        // Enable drawing behind system bars for true full-screen
         androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
-        // Make status and navigation bars transparent
         window.statusBarColor = android.graphics.Color.TRANSPARENT
         window.navigationBarColor = android.graphics.Color.TRANSPARENT
-        // Hide system UI bars
         if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
             androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)?.let { controller ->
                 controller.hide(android.view.WindowInsets.Type.statusBars() or android.view.WindowInsets.Type.navigationBars())
@@ -96,10 +100,22 @@ class MainActivity : ComponentActivity() {
     fun shareVideo(video: Video) {
         val sendIntent: Intent = Intent().apply {
             action = Intent.ACTION_SEND
-            putExtra(Intent.EXTRA_TEXT, "Check out this video: ${video.title}\n${video.url}")
-            type = "text/plain"
+            if (video.type == VideoType.ONLINE) {
+                putExtra(Intent.EXTRA_TEXT, "Check out this video: ${video.title}\n${video.url}")
+                type = "text/plain"
+            } else {
+                try {
+                    val uri = Uri.parse(video.url)
+                    putExtra(Intent.EXTRA_STREAM, uri)
+                    type = "video/*"
+                    addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+                } catch (e: Exception) {
+                    putExtra(Intent.EXTRA_TEXT, "Check out this video: ${video.title}\n${video.url}")
+                    type = "text/plain"
+                }
+            }
         }
-        val shareIntent = Intent.createChooser(sendIntent, null)
+        val shareIntent = Intent.createChooser(sendIntent, "Share Video")
         startActivity(shareIntent)
     }
 
@@ -139,6 +155,8 @@ fun MainScreen() {
                          currentDestination?.route != Screen.AddVideo.route &&
                          currentDestination?.route != Screen.VideoUrl.route &&
                          currentDestination?.route != Screen.Instagram.route &&
+                         currentDestination?.route != Screen.WhatsAppStatus.route &&
+                         currentDestination?.route?.startsWith("status_preview") != true &&
                          currentDestination?.route != Screen.Search.route &&
                          currentDestination?.route != Screen.ContinueWatching.route
 
@@ -236,6 +254,18 @@ fun MainScreen() {
                     },
                     onNavigateToContinueWatching = {
                         navController.navigate(Screen.ContinueWatching.route)
+                    },
+                    onPlaylistClick = { id, name ->
+                        navController.navigate(Screen.PlaylistDetail.createRoute(id, name))
+                    },
+                    onNavigateToWhatsAppStatus = {
+                        navController.navigate(Screen.WhatsAppStatus.route)
+                    },
+                    onNavigateToVideoUrl = {
+                        navController.navigate(Screen.VideoUrl.route)
+                    },
+                    onNavigateToInstagram = {
+                        navController.navigate(Screen.Instagram.route)
                     }
                 )
             }
@@ -336,6 +366,9 @@ fun MainScreen() {
                     },
                     onNavigateToInstagram = {
                         navController.navigate(Screen.Instagram.route)
+                    },
+                    onNavigateToWhatsAppStatus = {
+                        navController.navigate(Screen.WhatsAppStatus.route)
                     }
                 )
             }
@@ -382,6 +415,54 @@ fun MainScreen() {
                         navController.navigate(Screen.Player.createRoute(videoId)) {
                             popUpTo(Screen.Instagram.route) { inclusive = true }
                         }
+                    }
+                )
+            }
+            composable(Screen.WhatsAppStatus.route) {
+                val app = context.applicationContext as SZPlayerApplication
+                val viewModel: WhatsAppStatusViewModel = viewModel(
+                    factory = WhatsAppStatusViewModel.Factory(app.whatsappStatusRepository)
+                )
+                WhatsAppStatusScreen(
+                    viewModel = viewModel,
+                    onBack = { navController.popBackStack() },
+                    onStatusClick = { status ->
+                        navController.navigate(Screen.StatusPreview.createRoute(status.uri.toString(), status.isVideo))
+                    }
+                )
+            }
+            composable(
+                route = Screen.StatusPreview.route,
+                arguments = listOf(
+                    navArgument("uri") { type = NavType.StringType },
+                    navArgument("isVideo") { type = NavType.BoolType }
+                )
+            ) { backStackEntry ->
+                val uri = backStackEntry.arguments?.getString("uri") ?: ""
+                val isVideo = backStackEntry.arguments?.getBoolean("isVideo") ?: false
+                val app = context.applicationContext as SZPlayerApplication
+                val viewModel: WhatsAppStatusViewModel = viewModel(
+                    factory = WhatsAppStatusViewModel.Factory(app.whatsappStatusRepository)
+                )
+                
+                val uiState by viewModel.uiState.collectAsState()
+                val status = remember(uiState.statuses, uri) {
+                    uiState.statuses.find { it.uri.toString() == uri }
+                }
+                
+                StatusPreviewScreen(
+                    uriString = uri,
+                    isVideo = isVideo,
+                    onBack = { navController.popBackStack() },
+                    onSave = {
+                        status?.let {
+                            viewModel.saveStatus(it) { success, message ->
+                                Toast.makeText(context, message, Toast.LENGTH_SHORT).show()
+                            }
+                        }
+                    },
+                    onShare = {
+                        status?.let { viewModel.shareStatus(it) }
                     }
                 )
             }

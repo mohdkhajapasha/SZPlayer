@@ -3,6 +3,7 @@ package com.shaaztechno.videoplayer.presentation.player
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
+import com.shaaztechno.videoplayer.data.downloader.SZDownloadManager
 import com.shaaztechno.videoplayer.domain.model.Video
 import com.shaaztechno.videoplayer.domain.repository.VideoRepository
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -12,7 +13,8 @@ import kotlinx.coroutines.launch
 
 class PlayerViewModel(
     private val videoId: String,
-    private val repository: VideoRepository
+    private val repository: VideoRepository,
+    private val downloadManager: SZDownloadManager? = null
 ) : ViewModel() {
 
     private val _uiState = MutableStateFlow(PlayerUiState())
@@ -49,12 +51,24 @@ class PlayerViewModel(
         }
     }
 
+    fun deleteVideo(onDeleted: () -> Unit) {
+        val video = _uiState.value.video ?: return
+        viewModelScope.launch {
+            try {
+                downloadManager?.cancelDownload(video.id)
+            } catch (_: Exception) {}
+            repository.deleteVideo(video.id)
+            onDeleted()
+        }
+    }
+
     class Factory(
         private val videoId: String,
-        private val repository: VideoRepository
+        private val repository: VideoRepository,
+        private val downloadManager: SZDownloadManager? = null
     ) : ViewModelProvider.Factory {
         override fun <T : ViewModel> create(modelClass: Class<T>): T {
-            return PlayerViewModel(videoId, repository) as T
+            return PlayerViewModel(videoId, repository, downloadManager) as T
         }
     }
 }

@@ -34,7 +34,6 @@ fun LibraryScreen(
     val uiState by viewModel.uiState.collectAsState()
 
     var showSortMenu by remember { mutableStateOf(false) }
-    var activeMenuVideo by remember { mutableStateOf<Video?>(null) }
     
     var showRenameDialog by remember { mutableStateOf<Video?>(null) }
     var renameTitleText by remember { mutableStateOf("") }
@@ -161,80 +160,186 @@ fun LibraryScreen(
                                 FolderHeader(folderName, videos.size)
                             }
                             items(videos) { video ->
-                                Box {
-                                    VideoListItem(
-                                        video = video,
-                                        onClick = { onVideoClick(video) },
-                                        onShare = { activeMenuVideo = video }
-                                    )
-                                }
+                                var menuExpanded by remember { mutableStateOf(false) }
+                                VideoListItem(
+                                    video = video,
+                                    onClick = { onVideoClick(video) },
+                                    onShare = { menuExpanded = true },
+                                    dropdownContent = {
+                                        DropdownMenu(
+                                            expanded = menuExpanded,
+                                            onDismissRequest = { menuExpanded = false },
+                                            modifier = Modifier.background(Color(0xFF1E1E1E))
+                                        ) {
+                                            DropdownMenuItem(
+                                                text = { Text("Play", color = Color.White) },
+                                                leadingIcon = {
+                                                    Icon(
+                                                        Icons.Default.PlayArrow,
+                                                        contentDescription = null,
+                                                        tint = Color.White
+                                                    )
+                                                },
+                                                onClick = {
+                                                    menuExpanded = false
+                                                    onVideoClick(video)
+                                                }
+                                            )
+                                            DropdownMenuItem(
+                                                text = { Text("Add to Playlist", color = Color.White) },
+                                                leadingIcon = {
+                                                    Icon(
+                                                        Icons.Default.PlaylistAdd,
+                                                        contentDescription = null,
+                                                        tint = Color.White
+                                                    )
+                                                },
+                                                onClick = {
+                                                    menuExpanded = false
+                                                    showPlaylistDialog = video
+                                                }
+                                            )
+                                            DropdownMenuItem(
+                                                text = { Text("Rename", color = Color.White) },
+                                                leadingIcon = {
+                                                    Icon(
+                                                        Icons.Default.Edit,
+                                                        contentDescription = null,
+                                                        tint = Color.White
+                                                    )
+                                                },
+                                                onClick = {
+                                                    menuExpanded = false
+                                                    showRenameDialog = video
+                                                    renameTitleText = video.title
+                                                }
+                                            )
+                                            DropdownMenuItem(
+                                                text = { Text("Share", color = Color.White) },
+                                                leadingIcon = {
+                                                    Icon(
+                                                        Icons.Default.Share,
+                                                        contentDescription = null,
+                                                        tint = Color.White
+                                                    )
+                                                },
+                                                onClick = {
+                                                    menuExpanded = false
+                                                    onShareClick(video)
+                                                }
+                                            )
+                                            DropdownMenuItem(
+                                                text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
+                                                leadingIcon = {
+                                                    Icon(
+                                                        Icons.Default.Delete,
+                                                        contentDescription = null,
+                                                        tint = MaterialTheme.colorScheme.error
+                                                    )
+                                                },
+                                                onClick = {
+                                                    menuExpanded = false
+                                                    showDeleteDialog = video
+                                                }
+                                            )
+                                        }
+                                    }
+                                )
                             }
                         }
                     } else {
                         items(uiState.videos) { video ->
-                            Box {
-                                VideoListItem(
-                                    video = video,
-                                    onClick = { onVideoClick(video) },
-                                    onShare = { activeMenuVideo = video }
-                                )
-                            }
+                            var menuExpanded by remember { mutableStateOf(false) }
+                            VideoListItem(
+                                video = video,
+                                onClick = { onVideoClick(video) },
+                                    onShare = { menuExpanded = true },
+                                    dropdownContent = {
+                                        DropdownMenu(
+                                            expanded = menuExpanded,
+                                            onDismissRequest = { menuExpanded = false },
+                                            modifier = Modifier.background(Color(0xFF1E1E1E))
+                                        ) {
+                                            DropdownMenuItem(
+                                                text = { Text("Play", color = Color.White) },
+                                                leadingIcon = {
+                                                    Icon(
+                                                        Icons.Default.PlayArrow,
+                                                        contentDescription = null,
+                                                        tint = Color.White
+                                                    )
+                                                },
+                                                onClick = {
+                                                    menuExpanded = false
+                                                    onVideoClick(video)
+                                                }
+                                            )
+                                            DropdownMenuItem(
+                                                text = { Text("Add to Playlist", color = Color.White) },
+                                                leadingIcon = {
+                                                    Icon(
+                                                        Icons.Default.PlaylistAdd,
+                                                        contentDescription = null,
+                                                        tint = Color.White
+                                                    )
+                                                },
+                                                onClick = {
+                                                    menuExpanded = false
+                                                    showPlaylistDialog = video
+                                                }
+                                            )
+                                            DropdownMenuItem(
+                                                text = { Text("Rename", color = Color.White) },
+                                                leadingIcon = {
+                                                    Icon(
+                                                        Icons.Default.Edit,
+                                                        contentDescription = null,
+                                                        tint = Color.White
+                                                    )
+                                                },
+                                                onClick = {
+                                                    menuExpanded = false
+                                                    showRenameDialog = video
+                                                    renameTitleText = video.title
+                                                }
+                                            )
+                                            DropdownMenuItem(
+                                                text = { Text("Share", color = Color.White) },
+                                                leadingIcon = {
+                                                    Icon(
+                                                        Icons.Default.Share,
+                                                        contentDescription = null,
+                                                        tint = Color.White
+                                                    )
+                                                },
+                                                onClick = {
+                                                    menuExpanded = false
+                                                    onShareClick(video)
+                                                }
+                                            )
+                                            DropdownMenuItem(
+                                                text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
+                                                leadingIcon = {
+                                                    Icon(
+                                                        Icons.Default.Delete,
+                                                        contentDescription = null,
+                                                        tint = MaterialTheme.colorScheme.error
+                                                    )
+                                                },
+                                                onClick = {
+                                                    menuExpanded = false
+                                                    showDeleteDialog = video
+                                                }
+                                            )
+                                        }
+                                    }
+                            )
                         }
                     }
                     item { Spacer(Modifier.height(80.dp)) }
                 }
             }
 
-            // More Options Dropdown Menu
-            activeMenuVideo?.let { video ->
-                DropdownMenu(
-                    expanded = true,
-                    onDismissRequest = { activeMenuVideo = null },
-                    modifier = Modifier.background(Color(0xFF1E1E1E))
-                ) {
-                    DropdownMenuItem(
-                        text = { Text("Play", color = Color.White) },
-                        leadingIcon = { Icon(Icons.Default.PlayArrow, contentDescription = null, tint = ElectricGreen) },
-                        onClick = {
-                            onVideoClick(video)
-                            activeMenuVideo = null
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Add to Playlist", color = Color.White) },
-                        leadingIcon = { Icon(Icons.Default.PlaylistAdd, contentDescription = null, tint = Color.White) },
-                        onClick = {
-                            showPlaylistDialog = video
-                            activeMenuVideo = null
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Rename", color = Color.White) },
-                        leadingIcon = { Icon(Icons.Default.Edit, contentDescription = null, tint = Color.White) },
-                        onClick = {
-                            showRenameDialog = video
-                            renameTitleText = video.title
-                            activeMenuVideo = null
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Share", color = Color.White) },
-                        leadingIcon = { Icon(Icons.Default.Share, contentDescription = null, tint = Color.White) },
-                        onClick = {
-                            onShareClick(video)
-                            activeMenuVideo = null
-                        }
-                    )
-                    DropdownMenuItem(
-                        text = { Text("Delete", color = Color.Red) },
-                        leadingIcon = { Icon(Icons.Default.Delete, contentDescription = null, tint = Color.Red) },
-                        onClick = {
-                            showDeleteDialog = video
-                            activeMenuVideo = null
-                        }
-                    )
-                }
-            }
 
             // Rename Dialog
             showRenameDialog?.let { video ->

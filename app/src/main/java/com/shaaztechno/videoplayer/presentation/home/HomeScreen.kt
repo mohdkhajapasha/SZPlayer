@@ -1,6 +1,8 @@
 package com.shaaztechno.videoplayer.presentation.home
 
 import android.Manifest
+import android.app.Activity
+import android.content.pm.ActivityInfo
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -36,11 +38,9 @@ import coil.compose.AsyncImage
 import com.shaaztechno.videoplayer.R
 import com.shaaztechno.videoplayer.data.local.entity.HistoryEntity
 import com.shaaztechno.videoplayer.domain.model.Video
-import com.shaaztechno.videoplayer.domain.model.VideoType
 import com.shaaztechno.videoplayer.ui.theme.CardDark
 import com.shaaztechno.videoplayer.ui.theme.ElectricGreen
 import com.shaaztechno.videoplayer.ui.theme.MutedGray
-import com.shaaztechno.videoplayer.ui.theme.PillGreen
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -53,10 +53,21 @@ fun HomeScreen(
     onNavigateToLibrary: () -> Unit = {},
     onNavigateToPlaylists: () -> Unit = {},
     onNavigateToSettings: () -> Unit = {},
-    onNavigateToContinueWatching: () -> Unit = {}
+    onNavigateToContinueWatching: () -> Unit = {},
+    onPlaylistClick: (Long, String) -> Unit = { _, _ -> },
+    onNavigateToWhatsAppStatus: () -> Unit = {},
+    onNavigateToVideoUrl: () -> Unit = {},
+    onNavigateToInstagram: () -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
+    val activity = context as? Activity
+
+    // Fix orientation to portrait for HomeScreen
+    DisposableEffect(Unit) {
+        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
+        onDispose { }
+    }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -262,44 +273,29 @@ fun HomeScreen(
             }
 
             // 3. My Playlists Section
-            item {
-                Spacer(modifier = Modifier.height(16.dp))
-                SectionHeader(
-                    title = "My Playlists",
-                    showViewAll = true,
-                    onViewAllClick = onNavigateToPlaylists
-                )
-                LazyRow(
-                    contentPadding = PaddingValues(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    item {
-                        PlaylistHeroCard(
-                            name = "Favorites",
-                            videoCount = "12 videos",
-                            icon = Icons.Default.Favorite,
-                            backdropUrl = "https://images.unsplash.com/photo-1464822759023-fed622ff2c3b?w=500",
-                            onClick = onNavigateToPlaylists
-                        )
-                    }
-                    item {
-                        PlaylistHeroCard(
-                            name = "Workout",
-                            videoCount = "8 videos",
-                            icon = Icons.Default.FitnessCenter,
-                            backdropUrl = "https://images.unsplash.com/photo-1517838277536-f5f99be501cd?w=500",
-                            onClick = onNavigateToPlaylists
-                        )
-                    }
-                    item {
-                        PlaylistHeroCard(
-                            name = "Movies",
-                            videoCount = "15 videos",
-                            icon = Icons.Default.Movie,
-                            backdropUrl = "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=500",
-                            onClick = onNavigateToPlaylists
-                        )
-                    }
+            if (uiState.playlists.isNotEmpty()) {
+                item {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    SectionHeader(
+                        title = "My Playlists",
+                        showViewAll = true,
+                        onViewAllClick = onNavigateToPlaylists
+                    )
+
+                        LazyRow(
+                            contentPadding = PaddingValues(horizontal = 16.dp),
+                            horizontalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            items(uiState.playlists) { playlist ->
+                                PlaylistHeroCard(
+                                    name = playlist.name,
+                                    videoCount = "Playlist",
+                                    icon = Icons.Default.PlaylistPlay,
+                                    backdropUrl = "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=500",
+                                    onClick = { onPlaylistClick(playlist.id, playlist.name) }
+                                )
+                            }
+                        }
                 }
             }
 
@@ -361,47 +357,47 @@ fun HomeScreen(
             }
 
             // 5. Folders Section
-            item {
-                Spacer(modifier = Modifier.height(16.dp))
-                Text(
-                    text = "Folders",
-                    style = MaterialTheme.typography.titleMedium.copy(
-                        fontWeight = FontWeight.Bold,
-                        color = Color.White,
-                        fontSize = 17.sp
-                    ),
-                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
-                )
-                LazyRow(
-                    contentPadding = PaddingValues(horizontal = 16.dp),
-                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-                ) {
-                    item {
-                        ThemedFolderCard(
-                            name = "Bollywood",
-                            countText = "12 videos",
-                            backdropUrl = "https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=500",
-                            onClick = onNavigateToLibrary
-                        )
-                    }
-                    item {
-                        ThemedFolderCard(
-                            name = "Web Series",
-                            countText = "7 videos",
-                            backdropUrl = "https://images.unsplash.com/photo-1578632767115-351597cf2477?w=500",
-                            onClick = onNavigateToLibrary
-                        )
-                    }
-                    item {
-                        ThemedFolderCard(
-                            name = "Travel",
-                            countText = "18 videos",
-                            backdropUrl = "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=500",
-                            onClick = onNavigateToLibrary
-                        )
-                    }
-                }
-            }
+//            item {
+//                Spacer(modifier = Modifier.height(16.dp))
+//                Text(
+//                    text = "Folders",
+//                    style = MaterialTheme.typography.titleMedium.copy(
+//                        fontWeight = FontWeight.Bold,
+//                        color = Color.White,
+//                        fontSize = 17.sp
+//                    ),
+//                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
+//                )
+//                LazyRow(
+//                    contentPadding = PaddingValues(horizontal = 16.dp),
+//                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+//                ) {
+//                    item {
+//                        ThemedFolderCard(
+//                            name = "Bollywood",
+//                            countText = "12 videos",
+//                            backdropUrl = "https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=500",
+//                            onClick = onNavigateToLibrary
+//                        )
+//                    }
+//                    item {
+//                        ThemedFolderCard(
+//                            name = "Web Series",
+//                            countText = "7 videos",
+//                            backdropUrl = "https://images.unsplash.com/photo-1578632767115-351597cf2477?w=500",
+//                            onClick = onNavigateToLibrary
+//                        )
+//                    }
+//                    item {
+//                        ThemedFolderCard(
+//                            name = "Travel",
+//                            countText = "18 videos",
+//                            backdropUrl = "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=500",
+//                            onClick = onNavigateToLibrary
+//                        )
+//                    }
+//                }
+//            }
 
             // 6. Online Videos Section (if available)
             if (uiState.onlineVideos.isNotEmpty()) {
@@ -411,11 +407,48 @@ fun HomeScreen(
                 }
                 items(uiState.onlineVideos) { video ->
                     val progress = uiState.historyMap[video.id] ?: 0f
+                    var menuExpanded by remember { mutableStateOf(false) }
                     VideoListItem(
                         video = video,
                         progress = progress,
                         onClick = { onVideoClick(video) },
-                        onShare = { onShareClick(video) }
+                        onShare = { menuExpanded = true },
+                        dropdownContent = {
+                            DropdownMenu(
+                                expanded = menuExpanded,
+                                onDismissRequest = { menuExpanded = false },
+                                modifier = Modifier.background(Color(0xFF1E1E1E))
+                            ) {
+                                DropdownMenuItem(
+                                    text = { Text("Play", color = Color.White) },
+                                    leadingIcon = {
+                                        Icon(
+                                            Icons.Default.PlayArrow,
+                                            contentDescription = null,
+                                            tint = Color.White
+                                        )
+                                    },
+                                    onClick = {
+                                        menuExpanded = false
+                                        onVideoClick(video)
+                                    }
+                                )
+                                DropdownMenuItem(
+                                    text = { Text("Share", color = Color.White) },
+                                    leadingIcon = {
+                                        Icon(
+                                            Icons.Default.Share,
+                                            contentDescription = null,
+                                            tint = Color.White
+                                        )
+                                    },
+                                    onClick = {
+                                        menuExpanded = false
+                                        onShareClick(video)
+                                    }
+                                )
+                            }
+                        }
                     )
                 }
             }
@@ -1014,7 +1047,8 @@ fun VideoListItem(
     video: Video,
     progress: Float = 0f,
     onClick: () -> Unit,
-    onShare: () -> Unit = {}
+    onShare: () -> Unit = {},
+    dropdownContent: (@Composable BoxScope.() -> Unit)? = null
 ) {
     Row(
         modifier = Modifier
@@ -1065,8 +1099,13 @@ fun VideoListItem(
                 style = MaterialTheme.typography.bodySmall.copy(color = Color.Gray)
             )
         }
-        IconButton(onClick = onShare) {
-            Icon(Icons.Default.MoreVert, contentDescription = "Options", tint = Color.Gray)
+        // Trailing options button — wrapped in a Box so callers can anchor
+        // a DropdownMenu directly to this button (positioned like a leaf).
+        Box {
+            IconButton(onClick = onShare) {
+                Icon(Icons.Default.MoreVert, contentDescription = "Options", tint = Color.Gray)
+            }
+            dropdownContent?.invoke(this)
         }
     }
 }

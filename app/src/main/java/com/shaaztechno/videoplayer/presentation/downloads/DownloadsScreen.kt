@@ -12,6 +12,9 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -144,25 +147,48 @@ fun DownloadsScreen(
                         }
 
                         items(uiState.completedVideos, key = { it.id }) { video ->
-                            Box(modifier = Modifier.fillMaxWidth()) {
-                                VideoListItem(
-                                    video = video,
-                                    onClick = { onVideoClick(video) },
-                                    onShare = { onShareClick(video) }
-                                )
-                                IconButton(
-                                    onClick = { viewModel.deleteDownload(video) },
-                                    modifier = Modifier
-                                        .align(Alignment.CenterEnd)
-                                        .padding(end = 56.dp)
-                                ) {
-                                    Icon(
-                                        imageVector = Icons.Default.Delete,
-                                        contentDescription = "Delete Download",
-                                        tint = MaterialTheme.colorScheme.error
-                                    )
+                            var menuExpanded by remember { mutableStateOf(false) }
+                            VideoListItem(
+                                video = video,
+                                onClick = { onVideoClick(video) },
+                                onShare = { menuExpanded = true },
+                                dropdownContent = {
+                                    DropdownMenu(
+                                        expanded = menuExpanded,
+                                        onDismissRequest = { menuExpanded = false },
+                                        modifier = Modifier.background(Color(0xFF1E1E1E))
+                                    ) {
+                                        DropdownMenuItem(
+                                            text = { Text("Share", color = Color.White) },
+                                            leadingIcon = {
+                                                Icon(
+                                                    Icons.Default.Share,
+                                                    contentDescription = null,
+                                                    tint = Color.White
+                                                )
+                                            },
+                                            onClick = {
+                                                menuExpanded = false
+                                                onShareClick(video)
+                                            }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
+                                            leadingIcon = {
+                                                Icon(
+                                                    Icons.Default.Delete,
+                                                    contentDescription = null,
+                                                    tint = MaterialTheme.colorScheme.error
+                                                )
+                                            },
+                                            onClick = {
+                                                menuExpanded = false
+                                                viewModel.deleteDownload(video)
+                                            }
+                                        )
+                                    }
                                 }
-                            }
+                            )
                         }
                     }
                 }

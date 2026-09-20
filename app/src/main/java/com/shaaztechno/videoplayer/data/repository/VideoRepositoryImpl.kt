@@ -2,6 +2,7 @@ package com.shaaztechno.videoplayer.data.repository
 
 import android.content.ContentUris
 import android.content.Context
+import android.net.Uri
 import android.provider.MediaStore
 import com.shaaztechno.videoplayer.data.local.dao.HistoryDao
 import com.shaaztechno.videoplayer.data.local.dao.VideoDao
@@ -121,7 +122,22 @@ class VideoRepositoryImpl(
     }
 
     override suspend fun deleteVideo(id: String) {
-        videoDao.deleteVideo(id)
+        withContext(Dispatchers.IO) {
+            val video = videoDao.getVideoById(id)
+            if (video != null) {
+                if (video.type == VideoType.DOWNLOADED.name || video.type == VideoType.LOCAL.name) {
+                    try {
+                        val uri = Uri.parse(video.url)
+                        if (uri.scheme == "content") {
+                            context.contentResolver.delete(uri, null, null)
+                        }
+                    } catch (e: Exception) {
+                        e.printStackTrace()
+                    }
+                }
+                videoDao.deleteVideo(id)
+            }
+        }
     }
 
     override fun getPlaybackHistory(): Flow<List<HistoryEntity>> {

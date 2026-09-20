@@ -39,6 +39,12 @@ class PlaylistViewModel(
         }
     }
 
+    fun deletePlaylist(playlist: PlaylistEntity) {
+        viewModelScope.launch {
+            playlistDao.deletePlaylist(playlist)
+        }
+    }
+
     class Factory(
         private val playlistDao: PlaylistDao,
         private val repository: VideoRepository

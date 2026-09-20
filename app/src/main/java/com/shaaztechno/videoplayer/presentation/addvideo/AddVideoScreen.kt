@@ -15,6 +15,7 @@ import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.VideoLibrary
+import androidx.compose.material.icons.filled.Whatsapp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -23,7 +24,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextDecoration
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.shaaztechno.videoplayer.ui.theme.BorderSubtle
@@ -39,7 +39,8 @@ fun AddVideoScreen(
     onBack: () -> Unit,
     onBrowseDeviceVideos: () -> Unit,
     onNavigateToUrlScreen: () -> Unit,
-    onNavigateToInstagram: () -> Unit
+    onNavigateToInstagram: () -> Unit,
+    onNavigateToWhatsAppStatus: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
@@ -98,12 +99,12 @@ fun AddVideoScreen(
                 modifier = Modifier.padding(bottom = 8.dp)
             )
 
-            // Option 1: Local Video Card
+            // Option 1: WhatsApp Status Card (New)
             AddVideoOptionCard(
-                title = "Local Video",
-                subtitle = "Choose a video from your device",
-                icon = Icons.Default.Folder,
-                onClick = { launcher.launch(arrayOf("video/*")) }
+                title = "WhatsApp Status",
+                subtitle = "Save and share WhatsApp status updates",
+                icon = Icons.Default.Whatsapp,
+                onClick = onNavigateToWhatsAppStatus
             )
 
             // Option 2: Video URL Card
@@ -122,9 +123,17 @@ fun AddVideoScreen(
                 onClick = onNavigateToInstagram
             )
 
+            // Option 4: Local Video Card
+            AddVideoOptionCard(
+                title = "Local Video",
+                subtitle = "Choose a video from your device",
+                icon = Icons.Default.Folder,
+                onClick = { launcher.launch(arrayOf("video/*")) }
+            )
+
             Spacer(modifier = Modifier.height(8.dp))
 
-            // Option 4: Browse Device Library
+            // Option 5: Browse Device Library
             Card(
                 modifier = Modifier
                     .fillMaxWidth()

@@ -12,6 +12,10 @@ sealed class Screen(val route: String) {
     object AddVideo : Screen("add_video")
     object VideoUrl : Screen("video_url")
     object Instagram : Screen("instagram")
+    object WhatsAppStatus : Screen("whatsapp_status")
+    object StatusPreview : Screen("status_preview?uri={uri}&isVideo={isVideo}") {
+        fun createRoute(uri: String, isVideo: Boolean) = "status_preview?uri=$uri&isVideo=$isVideo"
+    }
     object Search : Screen("search")
     object ContinueWatching : Screen("continue_watching")
     object Player : Screen("player/{videoId}") {

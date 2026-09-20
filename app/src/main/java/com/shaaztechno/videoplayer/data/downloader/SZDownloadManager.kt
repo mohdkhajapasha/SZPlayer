@@ -18,9 +18,11 @@ import androidx.media3.exoplayer.offline.DownloadIndex
 import androidx.media3.exoplayer.offline.DownloadManager
 import androidx.media3.exoplayer.offline.DownloadRequest
 import androidx.media3.exoplayer.offline.DownloadService
+import com.shaaztechno.videoplayer.SZPlayerApplication
 import com.shaaztechno.videoplayer.domain.model.Video
 import com.shaaztechno.videoplayer.domain.model.VideoType
 import com.shaaztechno.videoplayer.domain.repository.VideoRepository
+import com.shaaztechno.videoplayer.domain.repository.VideoStorageRepository
 import com.shaaztechno.videoplayer.service.SZDownloadService
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
@@ -31,6 +33,8 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
+import okhttp3.OkHttpClient
+import okhttp3.Request
 import java.io.File
 import java.util.concurrent.Executors
 
@@ -51,7 +55,9 @@ data class DownloadProgressItem(
 @OptIn(UnstableApi::class)
 class SZDownloadManager private constructor(
     private val context: Context,
-    private val videoRepository: VideoRepository
+    private val videoRepository: VideoRepository,
+    private val videoStorageRepository: VideoStorageRepository,
+    private val okHttpClient: OkHttpClient
 ) {
     private val scope = CoroutineScope(Dispatchers.IO + Job())
     private val databaseProvider: DatabaseProvider = StandaloneDatabaseProvider(context)
@@ -69,8 +75,6 @@ class SZDownloadManager private constructor(
         .setReadTimeoutMs(15000)
         .setAllowCrossProtocolRedirects(true)
 
-    // DefaultDataSource wraps httpDataSourceFactory and also handles local
-    // content:// and file:// URIs, so both local and network videos work.
     val defaultDataSourceFactory: DataSource.Factory by lazy {
         DefaultDataSource.Factory(context, httpDataSourceFactory)
     }
@@ -78,7 +82,7 @@ class SZDownloadManager private constructor(
     val cacheDataSourceFactory: DataSource.Factory = CacheDataSource.Factory()
         .setCache(downloadCache)
         .setUpstreamDataSourceFactory(defaultDataSourceFactory)
-        .setCacheWriteDataSinkFactory(null) // Read-only cache datasource for playback
+        .setCacheWriteDataSinkFactory(null)
         .setFlags(CacheDataSource.FLAG_IGNORE_CACHE_ON_ERROR)
 
     val downloadManager: DownloadManager = DownloadManager(
@@ -105,15 +109,12 @@ class SZDownloadManager private constructor(
             ) {
                 updateDownloadList()
                 if (download.state == Download.STATE_COMPLETED) {
-                    syncCompletedDownloadToRepository(download)
+                    processCompletedDownload(download)
                 }
             }
 
             override fun onDownloadRemoved(downloadManager: DownloadManager, download: Download) {
                 updateDownloadList()
-                scope.launch {
-                    videoRepository.deleteVideo(download.request.id)
-                }
             }
 
             override fun onIdle(downloadManager: DownloadManager) {
@@ -185,7 +186,7 @@ class SZDownloadManager private constructor(
         _downloads.value = items
     }
 
-    private fun syncCompletedDownloadToRepository(download: Download) {
+    private fun processCompletedDownload(download: Download) {
         scope.launch {
             val title = try {
                 if (download.request.data.isNotEmpty()) {
@@ -197,15 +198,61 @@ class SZDownloadManager private constructor(
                 "Downloaded Video"
             }
 
-            val video = Video(
-                id = download.request.id,
-                title = title,
-                url = download.request.uri.toString(),
-                type = VideoType.DOWNLOADED,
-                size = download.bytesDownloaded,
-                dateAdded = System.currentTimeMillis()
-            )
-            videoRepository.addVideo(video)
+            val timestamp = System.currentTimeMillis()
+            val fileName = "SZ_${title.replace("[^a-zA-Z0-9]".toRegex(), "_")}_$timestamp"
+            val mimeType = download.request.mimeType ?: "video/mp4"
+
+            saveUrlToMediaStore(download.request.uri.toString(), fileName, mimeType, download.request.id, title)
+            
+            cancelDownload(download.request.id)
+        }
+    }
+
+    private suspend fun saveUrlToMediaStore(
+        url: String,
+        fileName: String,
+        mimeType: String,
+        originalId: String,
+        title: String
+    ) {
+        try {
+            val request = Request.Builder().url(url).build()
+            okHttpClient.newCall(request).execute().use { response ->
+                if (!response.isSuccessful) return
+                
+                val body = response.body ?: return
+                val detectedMimeType = body.contentType()?.let { "${it.type}/${it.subtype}" } ?: mimeType
+                
+                val tempFile = File(context.cacheDir, "temp_download_${System.currentTimeMillis()}.mp4")
+                tempFile.outputStream().use { output ->
+                    body.byteStream().copyTo(output)
+                }
+
+                val result = videoStorageRepository.saveVideoToMediaStore(
+                    sourceUri = Uri.fromFile(tempFile),
+                    fileName = fileName,
+                    mimeType = detectedMimeType,
+                    relativePath = "Movies/SZ Player/"
+                )
+
+                result.onSuccess { uri ->
+                    val video = Video(
+                        id = uri.toString(),
+                        title = title,
+                        url = uri.toString(),
+                        type = VideoType.DOWNLOADED,
+                        localUri = uri.toString(),
+                        size = tempFile.length(),
+                        dateAdded = System.currentTimeMillis()
+                    )
+                    videoRepository.addVideo(video)
+                    tempFile.delete()
+                }.onFailure {
+                    tempFile.delete()
+                }
+            }
+        } catch (e: Exception) {
+            e.printStackTrace()
         }
     }
 
@@ -222,19 +269,6 @@ class SZDownloadManager private constructor(
             downloadRequest,
             /* foreground = */ true
         )
-
-        // Also pre-register video entity in repository
-        scope.launch {
-            val video = Video(
-                id = id,
-                title = title,
-                url = url,
-                type = VideoType.DOWNLOADED,
-                size = 0,
-                dateAdded = System.currentTimeMillis()
-            )
-            videoRepository.addVideo(video)
-        }
     }
 
     fun pauseDownload(id: String) {
@@ -270,18 +304,25 @@ class SZDownloadManager private constructor(
         @Volatile
         private var INSTANCE: SZDownloadManager? = null
 
-        fun getInstance(context: Context, videoRepository: VideoRepository): SZDownloadManager {
+        fun getInstance(
+            context: Context,
+            videoRepository: VideoRepository,
+            videoStorageRepository: VideoStorageRepository,
+            okHttpClient: OkHttpClient
+        ): SZDownloadManager {
             return INSTANCE ?: synchronized(this) {
                 INSTANCE ?: SZDownloadManager(
                     context.applicationContext,
-                    videoRepository
+                    videoRepository,
+                    videoStorageRepository,
+                    okHttpClient
                 ).also { INSTANCE = it }
             }
         }
 
         fun getInstance(context: Context): SZDownloadManager {
-            val app = context.applicationContext as com.shaaztechno.videoplayer.SZPlayerApplication
-            return getInstance(context, app.videoRepository)
+            val app = context.applicationContext as SZPlayerApplication
+            return getInstance(context, app.videoRepository, app.videoStorageRepository, app.httpClient)
         }
     }
 }

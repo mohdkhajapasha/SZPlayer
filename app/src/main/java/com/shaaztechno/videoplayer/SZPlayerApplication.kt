@@ -11,7 +11,10 @@ import com.shaaztechno.videoplayer.data.repository.VideoRepositoryImpl
 import com.shaaztechno.videoplayer.data.downloader.VideoDownloader
 import com.shaaztechno.videoplayer.data.remote.InstagramMediaExtractor
 import com.shaaztechno.videoplayer.data.repository.InstagramRepositoryImpl
+import com.shaaztechno.videoplayer.data.repository.WhatsAppStatusRepositoryImpl
+import com.shaaztechno.videoplayer.data.repository.VideoStorageRepositoryImpl
 import com.shaaztechno.videoplayer.domain.usecase.GetInstagramReelUseCase
+import com.shaaztechno.videoplayer.domain.repository.VideoStorageRepository
 import okhttp3.OkHttpClient
 
 class SZPlayerApplication : Application(), ImageLoaderFactory {
@@ -19,7 +22,7 @@ class SZPlayerApplication : Application(), ImageLoaderFactory {
     val database by lazy { SZPlayerDatabase.getDatabase(this) }
     val settingsDataStore by lazy { SettingsDataStore(this) }
     
-    private val httpClient by lazy { OkHttpClient() }
+    val httpClient by lazy { OkHttpClient() }
     private val googleSheetParser by lazy { GoogleSheetParser(httpClient) }
     
     val videoRepository by lazy { 
@@ -31,12 +34,16 @@ class SZPlayerApplication : Application(), ImageLoaderFactory {
         )
     }
 
+    val videoStorageRepository: VideoStorageRepository by lazy {
+        VideoStorageRepositoryImpl(this)
+    }
+
     val videoDownloader by lazy {
         VideoDownloader(this, videoRepository)
     }
 
     val szDownloadManager by lazy {
-        com.shaaztechno.videoplayer.data.downloader.SZDownloadManager.getInstance(this, videoRepository)
+        com.shaaztechno.videoplayer.data.downloader.SZDownloadManager.getInstance(this, videoRepository, videoStorageRepository, httpClient)
     }
 
     val videoUrlChecker by lazy {
@@ -59,6 +66,9 @@ class SZPlayerApplication : Application(), ImageLoaderFactory {
     private val instagramMediaExtractor by lazy { InstagramMediaExtractor(httpClient) }
     val instagramRepository by lazy { InstagramRepositoryImpl(instagramMediaExtractor) }
     val getInstagramReelUseCase by lazy { GetInstagramReelUseCase(instagramRepository) }
+
+    // WhatsApp Status Feature DI
+    val whatsappStatusRepository by lazy { WhatsAppStatusRepositoryImpl(this, videoStorageRepository, videoRepository) }
 
     override fun onCreate() {
         super.onCreate()

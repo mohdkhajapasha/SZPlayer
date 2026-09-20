@@ -64,7 +64,7 @@ fun PlayerScreen(
     val context = LocalContext.current
     val activity = context as? Activity
     val app = context.applicationContext as SZPlayerApplication
-    val viewModel: PlayerViewModel = viewModel(factory = PlayerViewModel.Factory(videoId, app.videoRepository))
+    val viewModel: PlayerViewModel = viewModel(factory = PlayerViewModel.Factory(videoId, app.videoRepository, app.szDownloadManager))
     val uiState by viewModel.uiState.collectAsState()
 
     val exoPlayer = remember {
@@ -92,13 +92,17 @@ fun PlayerScreen(
     var playbackSpeed by remember { mutableFloatStateOf(1f) }
     var resizeMode by remember { mutableIntStateOf(AspectRatioFrameLayout.RESIZE_MODE_FIT) }
     var isFullscreen by remember { mutableStateOf(true) }
+    var isPortrait by remember { mutableStateOf(true) }
 
-    // Buffering state — tracked via Player.Listener so it updates on every state change
+    // Buffering state & automatic track initialization
     var isBuffering by remember { mutableStateOf(false) }
     DisposableEffect(exoPlayer) {
         val listener = object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
                 isBuffering = playbackState == Player.STATE_BUFFERING
+            }
+            override fun onTracksChanged(tracks: Tracks) {
+                selectFirstCompatibleAudioTrack(exoPlayer, tracks)
             }
         }
         exoPlayer.addListener(listener)
@@ -106,12 +110,14 @@ fun PlayerScreen(
     }
     
     var activeDetailType by remember { mutableStateOf<PlayerDetailType?>(null) }
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    var isMenuOpen by remember { mutableStateOf(false) }
 
     val scope = rememberCoroutineScope()
 
     // Hide controls after delay
-    LaunchedEffect(showControls, isLocked, activeDetailType) {
-        if (showControls && activeDetailType == null && !isLocked) {
+    LaunchedEffect(showControls, isLocked, activeDetailType, isMenuOpen, showDeleteDialog) {
+        if (showControls && activeDetailType == null && !isLocked && !isMenuOpen && !showDeleteDialog) {
             delay(4000)
             showControls = false
         }
@@ -164,6 +170,10 @@ fun PlayerScreen(
             } else {
                 MediaItem.fromUri(playUri)
             }
+            exoPlayer.trackSelectionParameters = exoPlayer.trackSelectionParameters
+                .buildUpon()
+                .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
+                .build()
             exoPlayer.setMediaItem(mediaItem)
             if (uiState.initialPosition > 0) {
                 exoPlayer.seekTo(uiState.initialPosition)
@@ -309,6 +319,10 @@ fun PlayerScreen(
                 onBack = onBack,
                 onPipClick = onPipClick,
                 onShareClick = { uiState.video?.let(onShareClick) },
+                onDeleteClick = { showDeleteDialog = true },
+                onDownloadClick = { /* TODO: trigger download */ },
+                onCatalogueClick = { /* TODO: open online catalogue */ },
+                onMenuExpandedChange = { isMenuOpen = it },
                 isVisible = showControls,
                 onSpeedClick = { activeDetailType = PlayerDetailType.SPEED },
                 onAspectClick = { activeDetailType = PlayerDetailType.ASPECT },
@@ -322,6 +336,21 @@ fun PlayerScreen(
                         val decorView = window.decorView
                         if (!isFullscreen) {
                             // Exit fullscreen: restore system UI
+                            resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
+                        } else {
+                            // Enter fullscreen: hide system UI
+                            resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FILL
+                        }
+                    }
+                },
+                isPortrait = isPortrait,
+                onRotationClick= {
+                    isPortrait = !isPortrait
+                    activity?.let { act ->
+                        val window = act.window
+                        val decorView = window.decorView
+                        if (!isPortrait) {
+                            // Exit fullscreen: restore system UI
                             @Suppress("DEPRECATION")
                             decorView.systemUiVisibility = android.view.View.SYSTEM_UI_FLAG_VISIBLE
                             act.requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
@@ -329,10 +358,10 @@ fun PlayerScreen(
                             // Enter fullscreen: hide system UI
                             @Suppress("DEPRECATION")
                             decorView.systemUiVisibility = (
-                                android.view.View.SYSTEM_UI_FLAG_FULLSCREEN
-                                or android.view.View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                                or android.view.View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-                            )
+                                    android.view.View.SYSTEM_UI_FLAG_FULLSCREEN
+                                            or android.view.View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
+                                            or android.view.View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
+                                    )
                             act.requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
                         }
                     }
@@ -347,16 +376,16 @@ fun PlayerScreen(
                 ) {
                     Column(
                         horizontalAlignment = Alignment.CenterHorizontally,
-                        modifier = Modifier.padding(24.dp)
+                        modifier = Modifier.padding(18.dp)
                     ) {
                         gestureIcon?.let { icon ->
-                            Icon(icon, contentDescription = null, tint = ElectricGreen, modifier = Modifier.size(48.dp))
+                            Icon(icon, contentDescription = null, tint = Color.White, modifier = Modifier.size(24.dp))
                             Spacer(Modifier.height(8.dp))
                         }
                         Text(
                             text = text,
                             color = Color.White,
-                            style = MaterialTheme.typography.headlineSmall
+                            style = MaterialTheme.typography.titleMedium
                         )
                     }
                 }
@@ -393,6 +422,31 @@ fun PlayerScreen(
                     onDismiss = { activeDetailType = null }
                 )
             }
+
+            // Delete Confirmation Dialog
+            if (showDeleteDialog) {
+                AlertDialog(
+                    onDismissRequest = { showDeleteDialog = false },
+                    title = { Text("Delete Video", color = Color.White) },
+                    text = { Text("Are you sure you want to delete this video?", color = Color.Gray) },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            viewModel.deleteVideo {
+                                onBack()
+                            }
+                            showDeleteDialog = false
+                        }) {
+                            Text("Delete", color = Color.Red)
+                        }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { showDeleteDialog = false }) {
+                            Text("Cancel", color = Color.White)
+                        }
+                    },
+                    containerColor = Color(0xFF1E1E1E)
+                )
+            }
         }
     }
 }
@@ -406,14 +460,31 @@ fun PlayerControls(
     onBack: () -> Unit,
     onPipClick: () -> Unit,
     onShareClick: () -> Unit,
+    onDeleteClick: () -> Unit = {},
+    onDownloadClick: () -> Unit = {},
+    onCatalogueClick: () -> Unit = {},
+    onMenuExpandedChange: (Boolean) -> Unit = {},
     isVisible: Boolean,
     onSpeedClick: () -> Unit,
     onAspectClick: () -> Unit,
     onAudioClick: () -> Unit,
     onSubtitlesClick: () -> Unit,
     isFullscreen: Boolean = true,
-    onFullscreenClick: () -> Unit = {}
+    onFullscreenClick: () -> Unit = {},
+    onRotationClick: () -> Unit = {},
+    isPortrait: Boolean = true
 ) {
+    var currentSpeed by remember { mutableFloatStateOf(player.playbackParameters.speed) }
+    DisposableEffect(player) {
+        val listener = object : Player.Listener {
+            override fun onPlaybackParametersChanged(playbackParameters: androidx.media3.common.PlaybackParameters) {
+                currentSpeed = playbackParameters.speed
+            }
+        }
+        player.addListener(listener)
+        onDispose { player.removeListener(listener) }
+    }
+
     Box(modifier = Modifier.fillMaxSize()) {
         if (isVisible) {
             if (!isLocked) {
@@ -448,21 +519,105 @@ fun PlayerControls(
                         modifier = Modifier.weight(1f),
                         maxLines = 1
                     )
-                    IconButton(onClick = onFullscreenClick) {
+                    IconButton(onClick = onRotationClick) {
                         Icon(
-                            imageVector = if (isFullscreen) Icons.Rounded.Fullscreen else Icons.Rounded.FullscreenExit,
+                            modifier = Modifier.size(24.dp),
+                            imageVector =  Icons.Rounded.ScreenRotation,
+                            contentDescription = "Screen Rotation",
+                            tint = Color.White,
+                        )
+                    }
+                    IconButton(onClick = onFullscreenClick) {
+                        Icon(modifier = Modifier.size(28.dp),
+                            imageVector = if (isFullscreen){
+                                Icons.Rounded.Fullscreen
+
+                            } else {
+                                Icons.Rounded.FullscreenExit
+                           },
                             contentDescription = if (isFullscreen) "Fullscreen" else "Exit Fullscreen",
                             tint = Color.White
                         )
                     }
                     IconButton(onClick = onPipClick) {
-                        Icon(Icons.Rounded.PictureInPicture, contentDescription = "PiP", tint = Color.White)
+                        Icon(
+                            Icons.Rounded.PictureInPicture, contentDescription = "PiP", tint = Color.White,modifier = Modifier.size(24.dp))
                     }
-                    IconButton(onClick = onShareClick) {
-                        Icon(Icons.Rounded.Share, contentDescription = "Share", tint = Color.White)
-                    }
-                    IconButton(onClick = onSpeedClick) {
-                        Icon(Icons.Rounded.Speed, contentDescription = "Speed", tint = Color.White)
+                    Text(
+                        text = if (currentSpeed == 1f) "1.0x" else "${"%.2f".format(currentSpeed).trimEnd('0').trimEnd('.')}x",
+                        color = Color.White,
+                        style = MaterialTheme.typography.titleMedium,
+                        fontWeight = FontWeight.Bold,
+                        modifier = Modifier
+                            .padding(horizontal = 12.dp)
+                            .clickable { onSpeedClick() }
+                    )
+                    var menuExpanded by remember { mutableStateOf(false) }
+                    Box {
+                        IconButton(onClick = {
+                            menuExpanded = true
+                            onMenuExpandedChange(true)
+                        }) {
+                            Icon(
+                                imageVector = Icons.Default.MoreVert,
+                                contentDescription = "More Options",
+                                tint = Color.White,
+                                modifier = Modifier.size(24.dp)
+                            )
+                        }
+                        DropdownMenu(
+                            expanded = menuExpanded,
+                            onDismissRequest = {
+                                menuExpanded = false
+                                onMenuExpandedChange(false)
+                            },
+                            modifier = Modifier.background(Color(0xFF1E1E1E))
+                        ) {
+                            DropdownMenuItem(
+                                text = { Text("Share", color = Color.White) },
+                                leadingIcon = {
+                                    Icon(Icons.Default.Share, contentDescription = null, tint = Color.White)
+                                },
+                                onClick = {
+                                    menuExpanded = false
+                                    onMenuExpandedChange(false)
+                                    onShareClick()
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Download", color = Color.White) },
+                                leadingIcon = {
+                                    Icon(Icons.Rounded.Download, contentDescription = null, tint = Color.White)
+                                },
+                                onClick = {
+                                    menuExpanded = false
+                                    onMenuExpandedChange(false)
+                                    onDownloadClick()
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Online Catalogue", color = Color.White) },
+                                leadingIcon = {
+                                    Icon(Icons.Rounded.VideoLibrary, contentDescription = null, tint = Color.White)
+                                },
+                                onClick = {
+                                    menuExpanded = false
+                                    onMenuExpandedChange(false)
+                                    onCatalogueClick()
+                                }
+                            )
+                            DropdownMenuItem(
+                                text = { Text("Delete", color = Color.Red) },
+                                leadingIcon = {
+                                    Icon(Icons.Default.Delete, contentDescription = null, tint = Color.Red)
+                                },
+                                onClick = {
+                                    menuExpanded = false
+                                    onMenuExpandedChange(false)
+                                    onDeleteClick()
+                                }
+                            )
+                        }
                     }
                 }
 
@@ -582,24 +737,6 @@ fun PlayerControls(
                         horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        var currentSpeed by remember { mutableFloatStateOf(player.playbackParameters.speed) }
-                        DisposableEffect(player) {
-                            val listener = object : Player.Listener {
-                                override fun onPlaybackParametersChanged(playbackParameters: androidx.media3.common.PlaybackParameters) {
-                                    currentSpeed = playbackParameters.speed
-                                }
-                            }
-                            player.addListener(listener)
-                            onDispose { player.removeListener(listener) }
-                        }
-
-                        // Speed Label with Icon
-                        PlayerActionButton(
-                            icon = Icons.Rounded.Speed,
-                            label = if (currentSpeed == 1f) "Speed" else "${"%.2f".format(currentSpeed).trimEnd('0').trimEnd('.')}x",
-                            onClick = onSpeedClick
-                        )
-
                         // Aspect Label with Icon
                         PlayerActionButton(
                             icon = Icons.Rounded.AspectRatio,
@@ -935,6 +1072,12 @@ fun TrackSettings(player: Player, trackType: Int) {
         onDispose { player.removeListener(listener) }
     }
 
+    LaunchedEffect(currentTracks, trackType) {
+        if (trackType == C.TRACK_TYPE_AUDIO && !hasSelectionOverride(player, C.TRACK_TYPE_AUDIO)) {
+            selectFirstCompatibleAudioTrack(player, currentTracks)
+        }
+    }
+
     val trackGroups = remember(currentTracks, trackType) {
         val list = mutableListOf<Tracks.Group>()
         for (group in currentTracks.groups) {
@@ -960,38 +1103,50 @@ fun TrackSettings(player: Player, trackType: Int) {
     } else {
         val isTextTrack = trackType == C.TRACK_TYPE_TEXT
         val isSubtitlesDisabled = trackParameters.disabledTrackTypes.contains(C.TRACK_TYPE_TEXT)
-        val hasOverride = hasSelectionOverride(player, trackType)
+        val firstCompatibleTrack = remember(currentTracks, trackType) {
+            if (trackType == C.TRACK_TYPE_AUDIO) findFirstCompatibleAudioTrack(currentTracks) else null
+        }
+        val hasAnyAudioSelected = remember(trackGroups, trackParameters) {
+            if (trackType == C.TRACK_TYPE_AUDIO) {
+                trackGroups.any { g ->
+                    (0 until g.length).any { idx ->
+                        g.isTrackSelected(idx) || isTrackOverridden(trackParameters, g, idx)
+                    }
+                }
+            } else false
+        }
 
         LazyColumn {
-            item {
-                SettingsItem(
-                    text = if (isTextTrack) "Off" else "Default",
-                    isSelected = if (isTextTrack) isSubtitlesDisabled else !hasOverride,
-                    onClick = {
-                        if (isTextTrack) {
+            if (isTextTrack) {
+                item {
+                    SettingsItem(
+                        text = "Off",
+                        isSelected = isSubtitlesDisabled,
+                        onClick = {
                             player.trackSelectionParameters = player.trackSelectionParameters
                                 .buildUpon()
                                 .setTrackTypeDisabled(C.TRACK_TYPE_TEXT, true)
                                 .clearOverridesOfType(C.TRACK_TYPE_TEXT)
                                 .build()
-                        } else {
-                            player.trackSelectionParameters = player.trackSelectionParameters
-                                .buildUpon()
-                                .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, false)
-                                .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
-                                .build()
                         }
-                    }
-                )
+                    )
+                }
             }
             items(trackGroups) { group ->
                 for (i in 0 until group.length) {
                     val format = group.getTrackFormat(i)
                     val label = formatTrackLabel(format, i)
                     val isSelected = if (isTextTrack) {
-                        !isSubtitlesDisabled && group.isTrackSelected(i)
+                        !isSubtitlesDisabled && (group.isTrackSelected(i) || isTrackOverridden(trackParameters, group, i))
                     } else {
-                        group.isTrackSelected(i)
+                        val isDirectlySelected = group.isTrackSelected(i) || isTrackOverridden(trackParameters, group, i)
+                        if (isDirectlySelected) {
+                            true
+                        } else if (!hasAnyAudioSelected && firstCompatibleTrack != null) {
+                            group == firstCompatibleTrack.first && i == firstCompatibleTrack.second
+                        } else {
+                            false
+                        }
                     }
                     SettingsItem(
                         text = label,
@@ -1031,14 +1186,62 @@ private fun formatTrackLabel(format: androidx.media3.common.Format, index: Int):
     }
 }
 
+private fun findFirstCompatibleAudioTrack(tracks: Tracks): Pair<Tracks.Group, Int>? {
+    val audioGroups = tracks.groups.filter { it.type == C.TRACK_TYPE_AUDIO }
+    // First priority: fully supported track (FORMAT_HANDLED)
+    for (group in audioGroups) {
+        for (i in 0 until group.length) {
+            if (group.isTrackSupported(i, false)) {
+                return Pair(group, i)
+            }
+        }
+    }
+    // Fallback: track exceeding capabilities but supported codec
+    for (group in audioGroups) {
+        for (i in 0 until group.length) {
+            if (group.isTrackSupported(i, true)) {
+                return Pair(group, i)
+            }
+        }
+    }
+    return null
+}
+
+private fun selectFirstCompatibleAudioTrack(player: Player, tracks: Tracks): Boolean {
+    if (hasSelectionOverride(player, C.TRACK_TYPE_AUDIO)) {
+        return true
+    }
+    val firstCompatible = findFirstCompatibleAudioTrack(tracks) ?: return false
+    player.trackSelectionParameters = player.trackSelectionParameters
+        .buildUpon()
+        .setTrackTypeDisabled(C.TRACK_TYPE_AUDIO, false)
+        .setOverrideForType(
+            androidx.media3.common.TrackSelectionOverride(firstCompatible.first.mediaTrackGroup, firstCompatible.second)
+        )
+        .build()
+    return true
+}
+
 private fun hasSelectionOverride(player: Player, trackType: Int): Boolean {
     val overrides = player.trackSelectionParameters.overrides
+    if (overrides.keys.any { it.type == trackType }) {
+        return true
+    }
     for (group in player.currentTracks.groups) {
         if (group.type == trackType && overrides.containsKey(group.mediaTrackGroup)) {
             return true
         }
     }
     return false
+}
+
+private fun isTrackOverridden(
+    parameters: androidx.media3.common.TrackSelectionParameters,
+    group: Tracks.Group,
+    trackIndex: Int
+): Boolean {
+    val override = parameters.overrides[group.mediaTrackGroup]
+    return override != null && override.trackIndices.contains(trackIndex)
 }
 
 @Composable
