@@ -15,6 +15,9 @@ interface VideoDao {
     @Query("SELECT * FROM videos WHERE type = :type")
     fun getVideosByType(type: String): Flow<List<VideoEntity>>
 
+    @Query("SELECT id FROM videos WHERE type = :type")
+    suspend fun getVideoIdsByType(type: String): List<String>
+
     @Query("SELECT * FROM videos WHERE id = :id")
     suspend fun getVideoById(id: String): VideoEntity?
 
@@ -29,6 +32,9 @@ interface VideoDao {
 
     @Query("DELETE FROM videos WHERE id = :id")
     suspend fun deleteVideo(id: String)
+
+    @Query("DELETE FROM videos WHERE id IN (:ids)")
+    suspend fun deleteVideosByIds(ids: List<String>)
 
     @Query("DELETE FROM videos WHERE type = 'ONLINE'")
     suspend fun clearOnlineCatalog()

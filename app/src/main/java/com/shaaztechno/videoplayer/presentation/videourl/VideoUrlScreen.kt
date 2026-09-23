@@ -22,8 +22,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.shaaztechno.videoplayer.domain.model.VideoMediaInfo
 import com.shaaztechno.videoplayer.ui.theme.BorderSubtle
-import com.shaaztechno.videoplayer.ui.theme.CardDark
-import com.shaaztechno.videoplayer.ui.theme.DarkGray
 import com.shaaztechno.videoplayer.ui.theme.ElectricGreen
 import com.shaaztechno.videoplayer.ui.theme.MutedGray
 import com.shaaztechno.videoplayer.ui.theme.PillGreen
@@ -52,7 +50,7 @@ fun VideoUrlScreen(
                         style = MaterialTheme.typography.titleLarge.copy(
                             fontWeight = FontWeight.ExtraBold,
                             letterSpacing = 1.sp,
-                            color = Color.White
+                            color = MaterialTheme.colorScheme.onBackground
                         )
                     )
                 },
@@ -61,21 +59,22 @@ fun VideoUrlScreen(
                         Icon(
                             imageVector = Icons.Default.ArrowBack,
                             contentDescription = "Back",
-                            tint = Color.White
+                            tint = MaterialTheme.colorScheme.onBackground
                         )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Black
+                    containerColor = MaterialTheme.colorScheme.background
                 )
             )
-        }
+        },
+        contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { padding ->
         Column(
             modifier = Modifier
                 .padding(padding)
                 .fillMaxSize()
-                .background(Color.Black)
+                .background(MaterialTheme.colorScheme.background)
                 .verticalScroll(scrollState)
                 .padding(horizontal = 20.dp, vertical = 16.dp),
             verticalArrangement = Arrangement.spacedBy(20.dp)
@@ -84,7 +83,7 @@ fun VideoUrlScreen(
             Card(
                 modifier = Modifier.fillMaxWidth(),
                 shape = RoundedCornerShape(20.dp),
-                colors = CardDefaults.cardColors(containerColor = CardDark),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
                 border = BorderStroke(1.dp, BorderSubtle)
             ) {
                 Column(
@@ -95,7 +94,7 @@ fun VideoUrlScreen(
                         text = "Video URL",
                         style = MaterialTheme.typography.titleMedium.copy(
                             fontWeight = FontWeight.Bold,
-                            color = Color.White,
+                            color = MaterialTheme.colorScheme.onSurface,
                             fontSize = 16.sp
                         )
                     )
@@ -148,11 +147,11 @@ fun VideoUrlScreen(
                         colors = OutlinedTextFieldDefaults.colors(
                             focusedBorderColor = ElectricGreen,
                             unfocusedBorderColor = BorderSubtle,
-                            focusedTextColor = Color.White,
-                            unfocusedTextColor = Color.White,
+                            focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                            unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
                             cursorColor = ElectricGreen,
-                            focusedContainerColor = DarkGray,
-                            unfocusedContainerColor = DarkGray
+                            focusedContainerColor = MaterialTheme.colorScheme.background,
+                            unfocusedContainerColor = MaterialTheme.colorScheme.background
                         ),
                         maxLines = 4
                     )
@@ -171,7 +170,7 @@ fun VideoUrlScreen(
                             },
                             shape = RoundedCornerShape(25.dp),
                             border = BorderStroke(1.dp, BorderSubtle),
-                            colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+                            colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface),
                             modifier = Modifier.height(48.dp)
                         ) {
                             Icon(
@@ -192,8 +191,8 @@ fun VideoUrlScreen(
                             shape = RoundedCornerShape(25.dp),
                             colors = ButtonDefaults.buttonColors(
                                 containerColor = ElectricGreen,
-                                contentColor = Color.Black,
-                                disabledContainerColor = DarkGray,
+                                contentColor = MaterialTheme.colorScheme.background,
+                                disabledContainerColor = MaterialTheme.colorScheme.surface,
                                 disabledContentColor = MutedGray
                             ),
                             enabled = urlInput.isNotBlank() && uiState !is VideoUrlUiState.Checking
@@ -202,11 +201,11 @@ fun VideoUrlScreen(
                                 CircularProgressIndicator(
                                     modifier = Modifier.size(20.dp),
                                     strokeWidth = 2.dp,
-                                    color = Color.Black
+                                    color = MaterialTheme.colorScheme.background
                                 )
                                 Spacer(modifier = Modifier.width(10.dp))
                                 Text(
-                                    "Checking...",
+                                    "Checking…",
                                     style = MaterialTheme.typography.bodyMedium.copy(
                                         fontWeight = FontWeight.Bold
                                     )
@@ -238,7 +237,7 @@ fun VideoUrlScreen(
                     Card(
                         modifier = Modifier.fillMaxWidth(),
                         shape = RoundedCornerShape(16.dp),
-                        colors = CardDefaults.cardColors(containerColor = CardDark.copy(alpha = 0.6f)),
+                        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.6f)),
                         border = BorderStroke(1.dp, BorderSubtle)
                     ) {
                         Column(
@@ -256,7 +255,7 @@ fun VideoUrlScreen(
                                 Text(
                                     "Supported Formats",
                                     style = MaterialTheme.typography.titleSmall.copy(
-                                        color = Color.White,
+                                        color = MaterialTheme.colorScheme.onSurface,
                                         fontWeight = FontWeight.Bold
                                     )
                                 )
@@ -302,7 +301,7 @@ private fun CheckingCard() {
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = CardDark),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         border = BorderStroke(1.dp, BorderSubtle)
     ) {
         Column(
@@ -318,10 +317,10 @@ private fun CheckingCard() {
                 modifier = Modifier.size(44.dp)
             )
             Text(
-                text = "Checking video...",
+                text = "Checking video…",
                 style = MaterialTheme.typography.titleMedium.copy(
                     fontWeight = FontWeight.Bold,
-                    color = Color.White
+                    color = MaterialTheme.colorScheme.onSurface
                 )
             )
             Text(
@@ -343,7 +342,7 @@ private fun SuccessResultCard(
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = CardDark),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         border = BorderStroke(1.dp, ElectricGreen.copy(alpha = 0.5f))
     ) {
         Column(
@@ -401,7 +400,7 @@ private fun SuccessResultCard(
                 text = mediaInfo.title,
                 style = MaterialTheme.typography.titleMedium.copy(
                     fontWeight = FontWeight.Bold,
-                    color = Color.White
+                    color = MaterialTheme.colorScheme.onSurface
                 ),
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis
@@ -450,7 +449,7 @@ private fun SuccessResultCard(
                     shape = RoundedCornerShape(26.dp),
                     colors = ButtonDefaults.buttonColors(
                         containerColor = ElectricGreen,
-                        contentColor = Color.Black
+                        contentColor = MaterialTheme.colorScheme.background
                     ),
                     enabled = mediaInfo.isPlayable
                 ) {
@@ -509,7 +508,7 @@ private fun ErrorResultCard(
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(20.dp),
-        colors = CardDefaults.cardColors(containerColor = CardDark),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         border = BorderStroke(1.dp, MaterialTheme.colorScheme.error.copy(alpha = 0.5f))
     ) {
         Column(
@@ -536,7 +535,7 @@ private fun ErrorResultCard(
                     text = "Unable to access video",
                     style = MaterialTheme.typography.titleMedium.copy(
                         fontWeight = FontWeight.Bold,
-                        color = Color.White
+                        color = MaterialTheme.colorScheme.onSurface
                     )
                 )
             }
@@ -556,7 +555,7 @@ private fun ErrorResultCard(
                     .height(46.dp),
                 shape = RoundedCornerShape(23.dp),
                 border = BorderStroke(1.dp, BorderSubtle),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White)
+                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface)
             ) {
                 Icon(
                     imageVector = Icons.Default.Refresh,
@@ -591,7 +590,7 @@ private fun InfoRow(
         Text(
             text = value,
             style = MaterialTheme.typography.bodyMedium.copy(
-                color = if (isHighlight) ElectricGreen else Color.White,
+                color = if (isHighlight) ElectricGreen else MaterialTheme.colorScheme.onSurface,
                 fontWeight = FontWeight.SemiBold
             )
         )

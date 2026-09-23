@@ -41,14 +41,13 @@
         android:networkSecurityConfig="@xml/network_security_config"
         android:roundIcon="@mipmap/ic_launcher_round"
         android:supportsRtl="true"
-        android:testOnly="true"
         android:theme="@style/Theme.SZPlayer" >
         <activity
             android:name="com.shaaztechno.videoplayer.MainActivity"
             android:configChanges="orientation|screenSize|screenLayout|smallestScreenSize|density"
             android:exported="true"
             android:supportsPictureInPicture="true"
-            android:theme="@style/Theme.SZPlayer" >
+            android:theme="@style/Theme.App.Starting" >
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
 
@@ -65,6 +64,16 @@
                 <data android:mimeType="video/*" />
             </intent-filter>
         </activity>
+
+        <provider
+            android:name="androidx.core.content.FileProvider"
+            android:authorities="com.shaaztechno.videoplayer.fileprovider"
+            android:exported="false"
+            android:grantUriPermissions="true" >
+            <meta-data
+                android:name="android.support.FILE_PROVIDER_PATHS"
+                android:resource="@xml/file_paths" />
+        </provider>
 
         <service
             android:name="com.shaaztechno.videoplayer.service.player.VideoPlaybackService"

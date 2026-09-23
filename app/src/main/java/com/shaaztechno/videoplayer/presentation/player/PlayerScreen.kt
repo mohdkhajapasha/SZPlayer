@@ -1,11 +1,13 @@
 package com.shaaztechno.videoplayer.presentation.player
 
 import android.app.Activity
+import android.content.pm.ActivityInfo
 import android.content.Context
 import android.media.AudioManager
 import android.view.ViewGroup
 import android.view.WindowManager
 import android.widget.FrameLayout
+import android.widget.Toast
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.gestures.*
@@ -44,6 +46,7 @@ import androidx.media3.common.Tracks
 import androidx.media3.exoplayer.ExoPlayer
 import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
+import com.shaaztechno.videoplayer.MainActivity
 import com.shaaztechno.videoplayer.SZPlayerApplication
 import com.shaaztechno.videoplayer.domain.model.Video
 import com.shaaztechno.videoplayer.ui.theme.ElectricGreen
@@ -62,10 +65,11 @@ fun PlayerScreen(
     onShareClick: (Video) -> Unit
 ) {
     val context = LocalContext.current
-    val activity = context as? Activity
+    val activity = context as? MainActivity
     val app = context.applicationContext as SZPlayerApplication
     val viewModel: PlayerViewModel = viewModel(factory = PlayerViewModel.Factory(videoId, app.videoRepository, app.szDownloadManager))
     val uiState by viewModel.uiState.collectAsState()
+    val settings by app.settingsDataStore.settingsFlow.collectAsState(initial = null)
 
     val exoPlayer = remember {
         val cacheDataSourceFactory = app.szDownloadManager.cacheDataSourceFactory
@@ -86,7 +90,6 @@ fun PlayerScreen(
     var showControls by remember { mutableStateOf(true) }
     var gestureText by remember { mutableStateOf<String?>(null) }
     var gestureIcon by remember { mutableStateOf<ImageVector?>(null) }
-    // Float accumulator for smooth volume gesture (mirrors brightness approach)
     var volumeAccumulator by remember { mutableFloatStateOf(-1f) }
 
     var playbackSpeed by remember { mutableFloatStateOf(1f) }
@@ -94,12 +97,28 @@ fun PlayerScreen(
     var isFullscreen by remember { mutableStateOf(true) }
     var isPortrait by remember { mutableStateOf(true) }
 
+    // Fullscreen effect
+    LaunchedEffect(isFullscreen) {
+        activity?.setFullscreen(isFullscreen)
+    }
+
+    DisposableEffect(Unit) {
+        onDispose {
+            activity?.setFullscreen(false)
+            // Restore orientation if needed
+            activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+        }
+    }
+
     // Buffering state & automatic track initialization
     var isBuffering by remember { mutableStateOf(false) }
     DisposableEffect(exoPlayer) {
         val listener = object : Player.Listener {
             override fun onPlaybackStateChanged(playbackState: Int) {
                 isBuffering = playbackState == Player.STATE_BUFFERING
+                if (playbackState == Player.STATE_ENDED && settings?.autoPlayNext == true) {
+                    viewModel.loadNextVideo(exoPlayer.currentPosition, exoPlayer.duration)
+                }
             }
             override fun onTracksChanged(tracks: Tracks) {
                 selectFirstCompatibleAudioTrack(exoPlayer, tracks)
@@ -123,24 +142,19 @@ fun PlayerScreen(
         }
     }
 
-    // Tracks whether the player was playing before a lifecycle pause,
-    // so we can restore the exact state (play/paused) on resume
-    // instead of always forcing playback.
     var wasPlayingBeforeLifecyclePause by remember { mutableStateOf(true) }
 
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
-        val window = activity?.window
-        window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
-        
         val observer = LifecycleEventObserver { _, event ->
             when (event) {
                 Lifecycle.Event.ON_PAUSE -> {
                     wasPlayingBeforeLifecyclePause = exoPlayer.isPlaying
-                    exoPlayer.pause()
+                    if (settings?.backgroundPlaybackEnabled != true) {
+                        exoPlayer.pause()
+                    }
                 }
                 Lifecycle.Event.ON_RESUME -> {
-                    // Restore previous state: only resume if it was playing before
                     if (wasPlayingBeforeLifecyclePause) exoPlayer.play()
                 }
                 else -> {}
@@ -151,15 +165,40 @@ fun PlayerScreen(
             viewModel.updatePlaybackHistory(exoPlayer.currentPosition, exoPlayer.duration)
             exoPlayer.release()
             lifecycleOwner.lifecycle.removeObserver(observer)
+        }
+    }
+
+    // Keep screen awake setting
+    LaunchedEffect(settings?.keepScreenAwake) {
+        val window = activity?.window
+        if (settings?.keepScreenAwake == true) {
+            window?.addFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        } else {
             window?.clearFlags(WindowManager.LayoutParams.FLAG_KEEP_SCREEN_ON)
+        }
+    }
+
+    // Default Orientation setting
+    LaunchedEffect(settings?.defaultOrientation) {
+        activity?.let { act ->
+            when (settings?.defaultOrientation) {
+                "landscape" -> {
+                    act.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                    isPortrait = false
+                }
+                "portrait" -> {
+                    act.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
+                    isPortrait = true
+                }
+                else -> {
+                    act.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+                }
+            }
         }
     }
 
     LaunchedEffect(uiState.video) {
         uiState.video?.let { video ->
-            // For local/downloaded videos prefer localUri (content:// from MediaStore).
-            // Provide a video/* MIME hint so ExoPlayer can detect format even without
-            // a file extension in the URI path.
             val playUri = (video.localUri ?: video.url).let { android.net.Uri.parse(it) }
             val mediaItem = if (video.type == com.shaaztechno.videoplayer.domain.model.VideoType.LOCAL ||
                 video.type == com.shaaztechno.videoplayer.domain.model.VideoType.DOWNLOADED) {
@@ -175,7 +214,9 @@ fun PlayerScreen(
                 .clearOverridesOfType(C.TRACK_TYPE_AUDIO)
                 .build()
             exoPlayer.setMediaItem(mediaItem)
-            if (uiState.initialPosition > 0) {
+            
+            val resumePlayback = settings?.resumePlayback ?: true
+            if (resumePlayback && uiState.initialPosition > 0) {
                 exoPlayer.seekTo(uiState.initialPosition)
             }
             exoPlayer.prepare()
@@ -191,11 +232,11 @@ fun PlayerScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
-            .pointerInput(isLocked) {
+            .pointerInput(isLocked, settings) {
                 detectTapGestures(
                     onTap = { showControls = !showControls },
                     onDoubleTap = { offset ->
-                        if (isLocked) return@detectTapGestures
+                        if (isLocked || settings?.seekingGestureEnabled == false) return@detectTapGestures
                         val width = size.width
                         if (offset.x < width / 2) {
                             exoPlayer.seekBack()
@@ -229,7 +270,7 @@ fun PlayerScreen(
                     }
                 )
             }
-            .pointerInput(isLocked) {
+            .pointerInput(isLocked, settings) {
                 if (isLocked) return@pointerInput
                 detectDragGestures(
                     onDrag = { change, dragAmount ->
@@ -237,45 +278,46 @@ fun PlayerScreen(
                         val height = size.height
                         
                         if (abs(dragAmount.y) > abs(dragAmount.x)) {
-                            // Vertical drag
                             if (change.position.x < width / 2) {
-                                // Brightness (Left side)
-                                activity?.window?.let { window ->
-                                    val lp = window.attributes
-                                    val currentBrightness = if (lp.screenBrightness < 0) 0.5f else lp.screenBrightness
-                                    lp.screenBrightness = (currentBrightness - dragAmount.y / height).coerceIn(0f, 1f)
-                                    window.attributes = lp
-                                    gestureText = "Brightness: ${(lp.screenBrightness * 100).toInt()}%"
-                                    gestureIcon = when {
-                                        lp.screenBrightness > 0.7f -> Icons.Rounded.BrightnessHigh
-                                        lp.screenBrightness > 0.3f -> Icons.Rounded.BrightnessMedium
-                                        else -> Icons.Rounded.BrightnessLow
+                                if (settings?.brightnessGestureEnabled != false) {
+                                    activity?.window?.let { window ->
+                                        val lp = window.attributes
+                                        val currentBrightness = if (lp.screenBrightness < 0) 0.5f else lp.screenBrightness
+                                        lp.screenBrightness = (currentBrightness - dragAmount.y / height).coerceIn(0f, 1f)
+                                        window.attributes = lp
+                                        gestureText = "Brightness: ${(lp.screenBrightness * 100).toInt()}%"
+                                        gestureIcon = when {
+                                            lp.screenBrightness > 0.7f -> Icons.Rounded.BrightnessHigh
+                                            lp.screenBrightness > 0.3f -> Icons.Rounded.BrightnessMedium
+                                            else -> Icons.Rounded.BrightnessLow
+                                        }
                                     }
                                 }
                             } else {
-                                // Volume (Right side) — use float accumulator for smoothness
-                                val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
-                                // Seed accumulator from actual system volume on first touch
-                                if (volumeAccumulator < 0f) {
-                                    volumeAccumulator = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat()
+                                if (settings?.volumeGestureEnabled != false) {
+                                    val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+                                    if (volumeAccumulator < 0f) {
+                                        volumeAccumulator = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat()
+                                    }
+                                    volumeAccumulator = (volumeAccumulator - dragAmount.y / height * maxVolume).coerceIn(0f, maxVolume.toFloat())
+                                    val nextVolume = volumeAccumulator.toInt()
+                                    audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, nextVolume, 0)
+                                    gestureText = "Volume: ${(volumeAccumulator / maxVolume * 100).toInt()}%"
+                                    gestureIcon = if (nextVolume == 0) Icons.Rounded.VolumeOff else Icons.Rounded.VolumeUp
                                 }
-                                volumeAccumulator = (volumeAccumulator - dragAmount.y / height * maxVolume).coerceIn(0f, maxVolume.toFloat())
-                                val nextVolume = volumeAccumulator.toInt()
-                                audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, nextVolume, 0)
-                                gestureText = "Volume: ${(volumeAccumulator / maxVolume * 100).toInt()}%"
-                                gestureIcon = if (nextVolume == 0) Icons.Rounded.VolumeOff else Icons.Rounded.VolumeUp
                             }
                         } else {
-                            // Horizontal drag - Seeking
-                            val dragProgress = dragAmount.x / width
-                            val seekDelta = (dragProgress * 60000).toLong() // Seek 1 min per full width drag
-                            exoPlayer.seekTo((exoPlayer.currentPosition + seekDelta).coerceIn(0, exoPlayer.duration))
-                            gestureText = formatTime(exoPlayer.currentPosition)
-                            gestureIcon = if (dragAmount.x > 0) Icons.Rounded.FastForward else Icons.Rounded.FastRewind
+                            if (settings?.seekingGestureEnabled != false) {
+                                val dragProgress = dragAmount.x / width
+                                val seekDelta = (dragProgress * 60000).toLong()
+                                exoPlayer.seekTo((exoPlayer.currentPosition + seekDelta).coerceIn(0, exoPlayer.duration))
+                                gestureText = formatTime(exoPlayer.currentPosition)
+                                gestureIcon = if (dragAmount.x > 0) Icons.Rounded.FastForward else Icons.Rounded.FastRewind
+                            }
                         }
                     },
                     onDragEnd = {
-                        volumeAccumulator = -1f  // reset so next drag seeds from real system volume
+                        volumeAccumulator = -1f
                         scope.launch {
                             delay(1000)
                             gestureText = null
@@ -320,7 +362,14 @@ fun PlayerScreen(
                 onPipClick = onPipClick,
                 onShareClick = { uiState.video?.let(onShareClick) },
                 onDeleteClick = { showDeleteDialog = true },
-                onDownloadClick = { /* TODO: trigger download */ },
+                onDownloadClick = {
+                    uiState.video?.let { video ->
+                        if (video.type == com.shaaztechno.videoplayer.domain.model.VideoType.ONLINE) {
+                            app.szDownloadManager.startDownload(video.id, video.url, video.title, null)
+                            Toast.makeText(context, "Download started", Toast.LENGTH_SHORT).show()
+                        }
+                    }
+                },
                 onCatalogueClick = { /* TODO: open online catalogue */ },
                 onMenuExpandedChange = { isMenuOpen = it },
                 isVisible = showControls,
@@ -331,38 +380,15 @@ fun PlayerScreen(
                 isFullscreen = isFullscreen,
                 onFullscreenClick = {
                     isFullscreen = !isFullscreen
-                    activity?.let { act ->
-                        val window = act.window
-                        val decorView = window.decorView
-                        if (!isFullscreen) {
-                            // Exit fullscreen: restore system UI
-                            resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FIT
-                        } else {
-                            // Enter fullscreen: hide system UI
-                            resizeMode = AspectRatioFrameLayout.RESIZE_MODE_FILL
-                        }
-                    }
                 },
                 isPortrait = isPortrait,
                 onRotationClick= {
                     isPortrait = !isPortrait
                     activity?.let { act ->
-                        val window = act.window
-                        val decorView = window.decorView
                         if (!isPortrait) {
-                            // Exit fullscreen: restore system UI
-                            @Suppress("DEPRECATION")
-                            decorView.systemUiVisibility = android.view.View.SYSTEM_UI_FLAG_VISIBLE
-                            act.requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_UNSPECIFIED
+                            act.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
                         } else {
-                            // Enter fullscreen: hide system UI
-                            @Suppress("DEPRECATION")
-                            decorView.systemUiVisibility = (
-                                    android.view.View.SYSTEM_UI_FLAG_FULLSCREEN
-                                            or android.view.View.SYSTEM_UI_FLAG_HIDE_NAVIGATION
-                                            or android.view.View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY
-                                    )
-                            act.requestedOrientation = android.content.pm.ActivityInfo.SCREEN_ORIENTATION_SENSOR_LANDSCAPE
+                            act.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_SENSOR_PORTRAIT
                         }
                     }
                 }
@@ -391,7 +417,6 @@ fun PlayerScreen(
                 }
             }
 
-            // Buffering indicator — shown for online videos during initial load and rebuffering
             if (isBuffering && uiState.video?.type == com.shaaztechno.videoplayer.domain.model.VideoType.ONLINE) {
                 Column(
                     modifier = Modifier.align(Alignment.Center),
@@ -423,7 +448,6 @@ fun PlayerScreen(
                 )
             }
 
-            // Delete Confirmation Dialog
             if (showDeleteDialog) {
                 AlertDialog(
                     onDismissRequest = { showDeleteDialog = false },
@@ -474,7 +498,7 @@ fun PlayerControls(
     onRotationClick: () -> Unit = {},
     isPortrait: Boolean = true
 ) {
-    var currentSpeed by remember { mutableFloatStateOf(player.playbackParameters.speed) }
+    var currentSpeed by remember { mutableStateOf(player.playbackParameters.speed) }
     DisposableEffect(player) {
         val listener = object : Player.Listener {
             override fun onPlaybackParametersChanged(playbackParameters: androidx.media3.common.PlaybackParameters) {
@@ -488,7 +512,6 @@ fun PlayerControls(
     Box(modifier = Modifier.fillMaxSize()) {
         if (isVisible) {
             if (!isLocked) {
-                // Top Bar Gradient
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -501,7 +524,6 @@ fun PlayerControls(
                         )
                 )
 
-                // Top Bar
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -529,13 +551,12 @@ fun PlayerControls(
                     }
                     IconButton(onClick = onFullscreenClick) {
                         Icon(modifier = Modifier.size(28.dp),
-                            imageVector = if (isFullscreen){
+                            imageVector = if (!isFullscreen){
                                 Icons.Rounded.Fullscreen
-
                             } else {
                                 Icons.Rounded.FullscreenExit
                            },
-                            contentDescription = if (isFullscreen) "Fullscreen" else "Exit Fullscreen",
+                            contentDescription = if (!isFullscreen) "Fullscreen" else "Exit Fullscreen",
                             tint = Color.White
                         )
                     }
@@ -621,7 +642,6 @@ fun PlayerControls(
                     }
                 }
 
-                // Center Controls
                 Row(
                     modifier = Modifier.align(Alignment.Center),
                     verticalAlignment = Alignment.CenterVertically,
@@ -655,7 +675,6 @@ fun PlayerControls(
                     }
                 }
 
-                // Bottom Bar Gradient
                 Box(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -668,16 +687,15 @@ fun PlayerControls(
                         )
                 )
 
-                // Bottom Bar
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
                         .align(Alignment.BottomCenter)
                         .padding(horizontal = 16.dp, vertical = 8.dp)
                 ) {
-                    var position by remember { mutableLongStateOf(player.currentPosition) }
-                    var duration by remember { mutableLongStateOf(player.duration) }
-                    var bufferedPosition by remember { mutableLongStateOf(player.bufferedPosition) }
+                    var position by remember { mutableStateOf(player.currentPosition) }
+                    var duration by remember { mutableStateOf(player.duration) }
+                    var bufferedPosition by remember { mutableStateOf(player.bufferedPosition) }
 
                     LaunchedEffect(player) {
                         while (true) {
@@ -688,7 +706,6 @@ fun PlayerControls(
                         }
                     }
 
-                    // Seekbar with buffering
                     Box(modifier = Modifier.fillMaxWidth().height(32.dp), contentAlignment = Alignment.Center) {
                         if (duration > 0) {
                             LinearProgressIndicator(
@@ -714,7 +731,6 @@ fun PlayerControls(
                         )
                     }
 
-                    // Time Display
                     Row(
                         modifier = Modifier.fillMaxWidth(),
                         horizontalArrangement = Arrangement.SpaceBetween,
@@ -729,7 +745,6 @@ fun PlayerControls(
 
                     Spacer(modifier = Modifier.height(8.dp))
 
-                    // Individual Functionality Buttons with Icons & Labels
                     Row(
                         modifier = Modifier
                             .fillMaxWidth()
@@ -737,21 +752,18 @@ fun PlayerControls(
                         horizontalArrangement = Arrangement.spacedBy(8.dp, Alignment.End),
                         verticalAlignment = Alignment.CenterVertically
                     ) {
-                        // Aspect Label with Icon
                         PlayerActionButton(
                             icon = Icons.Rounded.AspectRatio,
                             label = "Aspect",
                             onClick = onAspectClick
                         )
 
-                        // Audio Label with Icon
                         PlayerActionButton(
                             icon = Icons.Rounded.Audiotrack,
                             label = "Audio",
                             onClick = onAudioClick
                         )
 
-                        // Subtitles Label with Icon
                         PlayerActionButton(
                             icon = Icons.Rounded.Subtitles,
                             label = "Subtitles",
@@ -763,7 +775,6 @@ fun PlayerControls(
                 }
             }
 
-            // Lock Button
             IconButton(
                 onClick = onLockToggle,
                 modifier = Modifier
@@ -778,9 +789,8 @@ fun PlayerControls(
                 )
             }
         } else {
-            // Mini progress bar when controls are hidden
-            var position by remember { mutableLongStateOf(player.currentPosition) }
-            var duration by remember { mutableLongStateOf(player.duration) }
+            var position by remember { mutableStateOf(player.currentPosition) }
+            var duration by remember { mutableStateOf(player.duration) }
             LaunchedEffect(player) {
                 while (true) {
                     position = player.currentPosition
@@ -871,7 +881,6 @@ fun PlaybackDetailBottomSheet(
                 .fillMaxWidth()
                 .padding(bottom = 32.dp)
         ) {
-            // Header with Icon, Title, and Close Button
             Row(
                 modifier = Modifier
                     .fillMaxWidth()
@@ -916,7 +925,6 @@ fun PlaybackDetailBottomSheet(
                 color = Color.White.copy(alpha = 0.1f)
             )
 
-            // Content according to the label clicked
             when (type) {
                 PlayerDetailType.SPEED -> SpeedSettings(currentSpeed, onSpeedChange)
                 PlayerDetailType.ASPECT -> AspectSettings(currentResizeMode, onResizeModeChange)
@@ -958,7 +966,6 @@ fun PlaybackDetailDialog(
                     .fillMaxWidth()
                     .padding(bottom = 16.dp)
             ) {
-                // Header
                 Row(
                     modifier = Modifier
                         .fillMaxWidth()
@@ -1005,7 +1012,6 @@ fun PlaybackDetailDialog(
 
                 Spacer(modifier = Modifier.height(4.dp))
 
-                // Content
                 when (type) {
                     PlayerDetailType.SPEED -> SpeedSettings(currentSpeed, onSpeedChange)
                     PlayerDetailType.ASPECT -> AspectSettings(currentResizeMode, onResizeModeChange)
@@ -1188,7 +1194,6 @@ private fun formatTrackLabel(format: androidx.media3.common.Format, index: Int):
 
 private fun findFirstCompatibleAudioTrack(tracks: Tracks): Pair<Tracks.Group, Int>? {
     val audioGroups = tracks.groups.filter { it.type == C.TRACK_TYPE_AUDIO }
-    // First priority: fully supported track (FORMAT_HANDLED)
     for (group in audioGroups) {
         for (i in 0 until group.length) {
             if (group.isTrackSupported(i, false)) {
@@ -1196,7 +1201,6 @@ private fun findFirstCompatibleAudioTrack(tracks: Tracks): Pair<Tracks.Group, In
             }
         }
     }
-    // Fallback: track exceeding capabilities but supported codec
     for (group in audioGroups) {
         for (i in 0 until group.length) {
             if (group.isTrackSupported(i, true)) {

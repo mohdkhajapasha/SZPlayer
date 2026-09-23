@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
+    <!-- Core colors -->
     <color name="purple_200">#FFBB86FC</color>
     <color name="purple_500">#FF6200EE</color>
     <color name="purple_700">#FF3700B3</color>
@@ -8,4 +9,29 @@
     <color name="black">#FF000000</color>
     <color name="white">#FFFFFFFF</color>
     <color name="ic_launcher_background">#000000</color>
+
+    <!-- App specific colors extracted from Color.kt -->
+    <color name="dark_gray">#FF121212</color>
+    <color name="electric_green">#FFCCFF00</color>
+    <color name="light_gray">#FFF5F5F5</color>
+    <color name="gray">#FF888888</color>
+    <color name="surface_dark">#FF1E1E1E</color>
+    <color name="card_dark">#FF131715</color>
+    <color name="pill_green">#FF1D3520</color>
+    <color name="muted_gray">#FF8C9490</color>
+    <color name="border_subtle">#1AFFFFFF</color>
+
+    <!-- Inline colors extracted from screen files -->
+    <color name="dialog_dark">#FF1A1A1A</color>
+    <color name="bottom_sheet_dark">#FF161616</color>
+    <color name="circle_bg_add">#FF1E2420</color>
+    <color name="circle_bg_folder">#FF222926</color>
+    <color name="circle_bg_playlist">#FF142B18</color>
+    <color name="download_track">#FF232A25</color>
+    <color name="text_progress_timestamp">#FFA0A8A2</color>
+    <color name="text_continue_watching_sub">#FFB0B8B2</color>
+    <color name="text_app_sub">#FF7E8A82</color>
+    <color name="folder_chevron_tint">#FF555E59</color>
+    <color name="folder_icon_tint">#FFB0BEC5</color>
+    <color name="playlist_count_text">#FFB0B0B0</color>
 </resources>

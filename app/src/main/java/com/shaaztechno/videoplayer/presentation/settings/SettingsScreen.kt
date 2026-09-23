@@ -38,17 +38,18 @@ fun SettingsScreen(
                     ) 
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Black
+                    containerColor = MaterialTheme.colorScheme.background
                 )
             )
-        }
+        },
+        contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { padding ->
         settings?.let { userSettings ->
             Column(
                 modifier = Modifier
                     .fillMaxSize()
                     .padding(padding)
-                    .background(Color.Black)
+                    .background(MaterialTheme.colorScheme.background)
                     .verticalScroll(rememberScrollState())
                     .padding(16.dp),
                 verticalArrangement = Arrangement.spacedBy(20.dp)
@@ -57,7 +58,7 @@ fun SettingsScreen(
                 Text("Player Settings", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = ElectricGreen))
                 
                 Column(verticalArrangement = Arrangement.spacedBy(12.dp)) {
-                    Text("Default Orientation", style = MaterialTheme.typography.bodyLarge, color = Color.White)
+                    Text("Default Orientation", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onBackground)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         FilterChip(
                             selected = userSettings.defaultOrientation == "auto",
@@ -65,9 +66,9 @@ fun SettingsScreen(
                             label = { Text("Auto") },
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = ElectricGreen,
-                                selectedLabelColor = Color.Black,
-                                containerColor = Color(0xFF1E1E1E),
-                                labelColor = Color.White
+                                selectedLabelColor = MaterialTheme.colorScheme.background,
+                                containerColor = MaterialTheme.colorScheme.surface,
+                                labelColor = MaterialTheme.colorScheme.onSurface
                             )
                         )
                         FilterChip(
@@ -76,9 +77,9 @@ fun SettingsScreen(
                             label = { Text("Landscape") },
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = ElectricGreen,
-                                selectedLabelColor = Color.Black,
-                                containerColor = Color(0xFF1E1E1E),
-                                labelColor = Color.White
+                                selectedLabelColor = MaterialTheme.colorScheme.background,
+                                containerColor = MaterialTheme.colorScheme.surface,
+                                labelColor = MaterialTheme.colorScheme.onSurface
                             )
                         )
                         FilterChip(
@@ -87,9 +88,9 @@ fun SettingsScreen(
                             label = { Text("Portrait") },
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = ElectricGreen,
-                                selectedLabelColor = Color.Black,
-                                containerColor = Color(0xFF1E1E1E),
-                                labelColor = Color.White
+                                selectedLabelColor = MaterialTheme.colorScheme.background,
+                                containerColor = MaterialTheme.colorScheme.surface,
+                                labelColor = MaterialTheme.colorScheme.onSurface
                             )
                         )
                     }
@@ -153,7 +154,7 @@ fun SettingsScreen(
                 Text("Appearance", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = ElectricGreen))
                 
                 Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-                    Text("Dark Mode", style = MaterialTheme.typography.bodyLarge, color = Color.White)
+                    Text("Dark Mode", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onBackground)
                     Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                         FilterChip(
                             selected = userSettings.darkMode == "light",
@@ -161,9 +162,9 @@ fun SettingsScreen(
                             label = { Text("Light") },
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = ElectricGreen,
-                                selectedLabelColor = Color.Black,
-                                containerColor = Color(0xFF1E1E1E),
-                                labelColor = Color.White
+                                selectedLabelColor = MaterialTheme.colorScheme.background,
+                                containerColor = MaterialTheme.colorScheme.surface,
+                                labelColor = MaterialTheme.colorScheme.onSurface
                             )
                         )
                         FilterChip(
@@ -172,9 +173,9 @@ fun SettingsScreen(
                             label = { Text("Dark") },
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = ElectricGreen,
-                                selectedLabelColor = Color.Black,
-                                containerColor = Color(0xFF1E1E1E),
-                                labelColor = Color.White
+                                selectedLabelColor = MaterialTheme.colorScheme.background,
+                                containerColor = MaterialTheme.colorScheme.surface,
+                                labelColor = MaterialTheme.colorScheme.onSurface
                             )
                         )
                         FilterChip(
@@ -183,9 +184,9 @@ fun SettingsScreen(
                             label = { Text("System") },
                             colors = FilterChipDefaults.filterChipColors(
                                 selectedContainerColor = ElectricGreen,
-                                selectedLabelColor = Color.Black,
-                                containerColor = Color(0xFF1E1E1E),
-                                labelColor = Color.White
+                                selectedLabelColor = MaterialTheme.colorScheme.background,
+                                containerColor = MaterialTheme.colorScheme.surface,
+                                labelColor = MaterialTheme.colorScheme.onSurface
                             )
                         )
                     }
@@ -209,7 +210,7 @@ fun SettingsScreen(
                 Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 8.dp)) {
                     Icon(Icons.Default.Info, contentDescription = null, tint = Color.Gray)
                     Spacer(Modifier.width(12.dp))
-                    Text("SZ Player v1.0.0", style = MaterialTheme.typography.bodyMedium, color = Color.White)
+                    Text("SZ Player v1.0.0", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onBackground)
                 }
             }
         }
@@ -229,17 +230,17 @@ fun SettingsSwitchItem(
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(modifier = Modifier.weight(1f)) {
-            Text(title, style = MaterialTheme.typography.bodyLarge, color = Color.White)
+            Text(title, style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onBackground)
             Text(subtitle, style = MaterialTheme.typography.bodySmall, color = Color.Gray)
         }
         Switch(
             checked = checked, 
             onCheckedChange = onCheckedChange,
             colors = SwitchDefaults.colors(
-                checkedThumbColor = Color.Black,
+                checkedThumbColor = MaterialTheme.colorScheme.background,
                 checkedTrackColor = ElectricGreen,
                 uncheckedThumbColor = Color.Gray,
-                uncheckedTrackColor = Color(0xFF1E1E1E)
+                uncheckedTrackColor = MaterialTheme.colorScheme.surface
             )
         )
     }

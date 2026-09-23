@@ -1,5 +1,6 @@
 package com.shaaztechno.videoplayer.presentation.playlist
 
+import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
@@ -29,45 +30,48 @@ fun PlaylistScreen(
     Scaffold(
         topBar = {
             TopAppBar(
-                title = { Text("Playlists", fontWeight = FontWeight.Bold) }
+                title = { Text("Playlists", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground) },
+                colors = TopAppBarDefaults.topAppBarColors(
+                    containerColor = MaterialTheme.colorScheme.background
+                )
             )
         },
         floatingActionButton = {
             FloatingActionButton(onClick = { showDialog = true }) {
                 Icon(Icons.Default.Add, contentDescription = "Create Playlist")
             }
-        }
+        },
+        contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { padding ->
-        if (uiState.isLoading) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                CircularProgressIndicator()
-            }
-        } else if (uiState.playlists.isEmpty()) {
-            Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                Text("No playlists created yet.")
-            }
-        } else {
-            LazyColumn(
-                modifier = Modifier
-                    .fillMaxSize()
-                    .padding(padding)
-            ) {
-                items(uiState.playlists) { playlist ->
-                    ListItem(
-                        headlineContent = { Text(playlist.name) },
-                        leadingContent = { Icon(Icons.Default.PlaylistPlay, contentDescription = null) },
-                        trailingContent = {
-                            IconButton(onClick = { viewModel.deletePlaylist(playlist) }) {
-                                Icon(
-                                    imageVector = Icons.Default.Delete,
-                                    contentDescription = "Delete Playlist",
-                                    tint = MaterialTheme.colorScheme.error
-                                )
-                            }
-                        },
-                        modifier = Modifier.clickable { onPlaylistClick(playlist) }
-                    )
-                    Divider()
+        Box(modifier = Modifier
+            .fillMaxSize()
+            .padding(padding)
+            .background(MaterialTheme.colorScheme.background)
+        ) {
+            if (uiState.isLoading) {
+                CircularProgressIndicator(modifier = Modifier.align(Alignment.Center))
+            } else if (uiState.playlists.isEmpty()) {
+                Text("No playlists created yet.", modifier = Modifier.align(Alignment.Center), color = MaterialTheme.colorScheme.onBackground)
+            } else {
+                LazyColumn(modifier = Modifier.fillMaxSize()) {
+                    items(uiState.playlists) { playlist ->
+                        ListItem(
+                            headlineContent = { Text(playlist.name, color = MaterialTheme.colorScheme.onSurface) },
+                            leadingContent = { Icon(Icons.Default.PlaylistPlay, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface) },
+                            trailingContent = {
+                                IconButton(onClick = { viewModel.deletePlaylist(playlist) }) {
+                                    Icon(
+                                        imageVector = Icons.Default.Delete,
+                                        contentDescription = "Delete Playlist",
+                                        tint = MaterialTheme.colorScheme.error
+                                    )
+                                }
+                            },
+                            colors = ListItemDefaults.colors(containerColor = MaterialTheme.colorScheme.background),
+                            modifier = Modifier.clickable { onPlaylistClick(playlist) }
+                        )
+                        Divider(color = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f))
+                    }
                 }
             }
         }
@@ -101,7 +105,10 @@ fun PlaylistScreen(
                     TextButton(onClick = { showDialog = false }) {
                         Text("Cancel")
                     }
-                }
+                },
+                containerColor = MaterialTheme.colorScheme.surface,
+                titleContentColor = MaterialTheme.colorScheme.onSurface,
+                textContentColor = MaterialTheme.colorScheme.onSurface
             )
         }
     }

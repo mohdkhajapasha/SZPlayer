@@ -38,7 +38,6 @@ import coil.compose.AsyncImage
 import com.shaaztechno.videoplayer.R
 import com.shaaztechno.videoplayer.data.local.entity.HistoryEntity
 import com.shaaztechno.videoplayer.domain.model.Video
-import com.shaaztechno.videoplayer.ui.theme.CardDark
 import com.shaaztechno.videoplayer.ui.theme.ElectricGreen
 import com.shaaztechno.videoplayer.ui.theme.MutedGray
 
@@ -57,7 +56,8 @@ fun HomeScreen(
     onPlaylistClick: (Long, String) -> Unit = { _, _ -> },
     onNavigateToWhatsAppStatus: () -> Unit = {},
     onNavigateToVideoUrl: () -> Unit = {},
-    onNavigateToInstagram: () -> Unit = {}
+    onNavigateToInstagram: () -> Unit = {},
+    onFolderClick: (String) -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
     val context = LocalContext.current
@@ -115,7 +115,7 @@ fun HomeScreen(
                                 style = MaterialTheme.typography.titleLarge.copy(
                                     fontWeight = FontWeight.Black,
                                     letterSpacing = 1.5.sp,
-                                    color = Color.White,
+                                    color = MaterialTheme.colorScheme.onBackground,
                                     fontSize = 19.sp
                                 )
                             )
@@ -136,7 +136,7 @@ fun HomeScreen(
                         Icon(
                             Icons.Default.Search,
                             contentDescription = "Search",
-                            tint = Color.White,
+                            tint = MaterialTheme.colorScheme.onBackground,
                             modifier = Modifier.size(24.dp)
                         )
                     }
@@ -144,13 +144,13 @@ fun HomeScreen(
                         Icon(
                             Icons.Default.Settings,
                             contentDescription = "Settings",
-                            tint = Color.White,
+                            tint = MaterialTheme.colorScheme.onBackground,
                             modifier = Modifier.size(24.dp)
                         )
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Black
+                    containerColor = MaterialTheme.colorScheme.background
                 )
             )
         },
@@ -168,13 +168,14 @@ fun HomeScreen(
                     modifier = Modifier.size(28.dp)
                 )
             }
-        }
+        },
+        contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { padding ->
         LazyColumn(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .background(Color.Black)
+                .background(MaterialTheme.colorScheme.background)
         ) {
             // 1. Continue Watching Section
             item {
@@ -282,20 +283,20 @@ fun HomeScreen(
                         onViewAllClick = onNavigateToPlaylists
                     )
 
-                        LazyRow(
-                            contentPadding = PaddingValues(horizontal = 16.dp),
-                            horizontalArrangement = Arrangement.spacedBy(12.dp)
-                        ) {
-                            items(uiState.playlists) { playlist ->
-                                PlaylistHeroCard(
-                                    name = playlist.name,
-                                    videoCount = "Playlist",
-                                    icon = Icons.Default.PlaylistPlay,
-                                    backdropUrl = "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=500",
-                                    onClick = { onPlaylistClick(playlist.id, playlist.name) }
-                                )
-                            }
+                    LazyRow(
+                        contentPadding = PaddingValues(horizontal = 16.dp),
+                        horizontalArrangement = Arrangement.spacedBy(12.dp)
+                    ) {
+                        items(uiState.playlists) { playlist ->
+                            PlaylistHeroCard(
+                                name = playlist.name,
+                                videoCount = "Playlist",
+                                icon = Icons.Default.PlaylistPlay,
+                                backdropUrl = "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=500",
+                                onClick = { onPlaylistClick(playlist.id, playlist.name) }
+                            )
                         }
+                    }
                 }
             }
 
@@ -322,7 +323,7 @@ fun HomeScreen(
                             LocalFolderCard(
                                 name = folderName,
                                 countText = "${videos.size} videos",
-                                onClick = onNavigateToLibrary
+                                onClick = { onFolderClick(folderName) }
                             )
                         }
                     }
@@ -335,69 +336,26 @@ fun HomeScreen(
                             LocalFolderCard(
                                 name = "Movies",
                                 countText = "24 videos",
-                                onClick = onNavigateToLibrary
+                                onClick = { onFolderClick("Movies") }
                             )
                         }
                         item {
                             LocalFolderCard(
                                 name = "Downloads",
                                 countText = "8 videos",
-                                onClick = onNavigateToLibrary
+                                onClick = { onFolderClick("Downloads") }
                             )
                         }
                         item {
                             LocalFolderCard(
                                 name = "Camera",
                                 countText = "32 videos",
-                                onClick = onNavigateToLibrary
+                                onClick = { onFolderClick("Camera") }
                             )
                         }
                     }
                 }
             }
-
-            // 5. Folders Section
-//            item {
-//                Spacer(modifier = Modifier.height(16.dp))
-//                Text(
-//                    text = "Folders",
-//                    style = MaterialTheme.typography.titleMedium.copy(
-//                        fontWeight = FontWeight.Bold,
-//                        color = Color.White,
-//                        fontSize = 17.sp
-//                    ),
-//                    modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)
-//                )
-//                LazyRow(
-//                    contentPadding = PaddingValues(horizontal = 16.dp),
-//                    horizontalArrangement = Arrangement.spacedBy(12.dp)
-//                ) {
-//                    item {
-//                        ThemedFolderCard(
-//                            name = "Bollywood",
-//                            countText = "12 videos",
-//                            backdropUrl = "https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=500",
-//                            onClick = onNavigateToLibrary
-//                        )
-//                    }
-//                    item {
-//                        ThemedFolderCard(
-//                            name = "Web Series",
-//                            countText = "7 videos",
-//                            backdropUrl = "https://images.unsplash.com/photo-1578632767115-351597cf2477?w=500",
-//                            onClick = onNavigateToLibrary
-//                        )
-//                    }
-//                    item {
-//                        ThemedFolderCard(
-//                            name = "Travel",
-//                            countText = "18 videos",
-//                            backdropUrl = "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=500",
-//                            onClick = onNavigateToLibrary
-//                        )
-//                    }
-//                }
-//            }
 
             // 6. Online Videos Section (if available)
             if (uiState.onlineVideos.isNotEmpty()) {
@@ -417,15 +375,15 @@ fun HomeScreen(
                             DropdownMenu(
                                 expanded = menuExpanded,
                                 onDismissRequest = { menuExpanded = false },
-                                modifier = Modifier.background(Color(0xFF1E1E1E))
+                                modifier = Modifier.background(MaterialTheme.colorScheme.surface)
                             ) {
                                 DropdownMenuItem(
-                                    text = { Text("Play", color = Color.White) },
+                                    text = { Text("Play", color = MaterialTheme.colorScheme.onSurface) },
                                     leadingIcon = {
                                         Icon(
                                             Icons.Default.PlayArrow,
                                             contentDescription = null,
-                                            tint = Color.White
+                                            tint = MaterialTheme.colorScheme.onSurface
                                         )
                                     },
                                     onClick = {
@@ -434,12 +392,12 @@ fun HomeScreen(
                                     }
                                 )
                                 DropdownMenuItem(
-                                    text = { Text("Share", color = Color.White) },
+                                    text = { Text("Share", color = MaterialTheme.colorScheme.onSurface) },
                                     leadingIcon = {
                                         Icon(
                                             Icons.Default.Share,
                                             contentDescription = null,
-                                            tint = Color.White
+                                            tint = MaterialTheme.colorScheme.onSurface
                                         )
                                     },
                                     onClick = {
@@ -496,7 +454,7 @@ fun SectionHeader(
                 style = MaterialTheme.typography.titleMedium.copy(
                     fontWeight = FontWeight.Bold,
                     fontSize = 18.sp,
-                    color = Color.White
+                    color = MaterialTheme.colorScheme.onBackground
                 )
             )
         }
@@ -558,7 +516,7 @@ fun ContinueWatchingCard(
             .padding(horizontal = 16.dp)
             .clickable { onClick() },
         shape = RoundedCornerShape(18.dp),
-        colors = CardDefaults.cardColors(containerColor = CardDark)
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             AsyncImage(
@@ -768,14 +726,14 @@ fun RecentVideoCard(
                 overflow = TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.bodySmall.copy(
                     fontWeight = FontWeight.Bold,
-                    color = Color.White,
+                    color = MaterialTheme.colorScheme.onBackground,
                     fontSize = 13.sp
                 )
             )
             Icon(
                 Icons.Default.MoreVert,
                 contentDescription = "More",
-                tint = Color.White.copy(alpha = 0.65f),
+                tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.65f),
                 modifier = Modifier.size(16.dp)
             )
         }
@@ -806,7 +764,7 @@ fun PlaylistHeroCard(
             .height(105.dp)
             .clickable { onClick() },
         shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = CardDark)
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             AsyncImage(
@@ -900,8 +858,8 @@ fun LocalFolderCard(
             .height(90.dp)
             .clickable { onClick() },
         shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = CardDark),
-        border = BorderStroke(1.dp, Color.White.copy(alpha = 0.07f))
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+        border = BorderStroke(1.dp, MaterialTheme.colorScheme.onBackground.copy(alpha = 0.07f))
     ) {
         Column(
             modifier = Modifier
@@ -918,13 +876,13 @@ fun LocalFolderCard(
                     modifier = Modifier
                         .size(32.dp)
                         .clip(RoundedCornerShape(8.dp))
-                        .background(Color(0xFF222926)),
+                        .background(MaterialTheme.colorScheme.background),
                     contentAlignment = Alignment.Center
                 ) {
                     Icon(
                         Icons.Default.Folder,
                         contentDescription = null,
-                        tint = Color(0xFFB0BEC5),
+                        tint = MutedGray,
                         modifier = Modifier.size(18.dp)
                     )
                 }
@@ -932,7 +890,7 @@ fun LocalFolderCard(
                 Icon(
                     Icons.Default.ChevronRight,
                     contentDescription = null,
-                    tint = Color(0xFF555E59),
+                    tint = MutedGray,
                     modifier = Modifier.size(16.dp)
                 )
             }
@@ -942,7 +900,7 @@ fun LocalFolderCard(
                     text = name,
                     style = MaterialTheme.typography.labelLarge.copy(
                         fontWeight = FontWeight.Bold,
-                        color = Color.White,
+                        color = MaterialTheme.colorScheme.onBackground,
                         fontSize = 13.sp
                     ),
                     maxLines = 1,
@@ -973,7 +931,7 @@ fun ThemedFolderCard(
             .height(82.dp)
             .clickable { onClick() },
         shape = RoundedCornerShape(14.dp),
-        colors = CardDefaults.cardColors(containerColor = CardDark)
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             AsyncImage(
@@ -1088,7 +1046,7 @@ fun VideoListItem(
                 text = video.title,
                 style = MaterialTheme.typography.bodyLarge.copy(
                     fontWeight = FontWeight.Bold,
-                    color = Color.White
+                    color = MaterialTheme.colorScheme.onBackground
                 ),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis

@@ -59,13 +59,14 @@ class VideoRepositoryImpl(
     override suspend fun refreshLocalVideos() {
         withContext(Dispatchers.IO) {
             val localVideos = mutableListOf<Video>()
+            val currentMediaStoreIds = mutableSetOf<String>()
+            
             val projection = arrayOf(
                 MediaStore.Video.Media._ID,
                 MediaStore.Video.Media.DISPLAY_NAME,
                 MediaStore.Video.Media.DURATION,
                 MediaStore.Video.Media.SIZE,
                 MediaStore.Video.Media.DATE_ADDED,
-                MediaStore.Video.Media.DATA,
                 MediaStore.Video.Media.BUCKET_DISPLAY_NAME
             )
 
@@ -83,7 +84,6 @@ class VideoRepositoryImpl(
                 val durationColumn = it.getColumnIndexOrThrow(MediaStore.Video.Media.DURATION)
                 val sizeColumn = it.getColumnIndexOrThrow(MediaStore.Video.Media.SIZE)
                 val dateColumn = it.getColumnIndexOrThrow(MediaStore.Video.Media.DATE_ADDED)
-                val dataColumn = it.getColumnIndexOrThrow(MediaStore.Video.Media.DATA)
                 val bucketColumn = it.getColumnIndexOrThrow(MediaStore.Video.Media.BUCKET_DISPLAY_NAME)
 
                 while (it.moveToNext()) {
@@ -97,6 +97,8 @@ class VideoRepositoryImpl(
                         MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
                         id
                     ).toString()
+
+                    currentMediaStoreIds.add(id.toString())
 
                     localVideos.add(
                         Video(
@@ -113,6 +115,15 @@ class VideoRepositoryImpl(
                     )
                 }
             }
+
+            // Sync: Remove stale LOCAL videos from DB
+            val dbLocalIds = videoDao.getVideoIdsByType(VideoType.LOCAL.name)
+            val staleIds = dbLocalIds.filter { !currentMediaStoreIds.contains(it) }
+            if (staleIds.isNotEmpty()) {
+                videoDao.deleteVideosByIds(staleIds)
+            }
+
+            // Sync: Add or Update videos
             videoDao.insertVideos(localVideos.map { it.toEntity() })
         }
     }

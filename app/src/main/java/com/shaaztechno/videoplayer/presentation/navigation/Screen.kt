@@ -21,4 +21,7 @@ sealed class Screen(val route: String) {
     object Player : Screen("player/{videoId}") {
         fun createRoute(videoId: String) = "player/$videoId"
     }
+    object FolderVideos : Screen("folder_videos/{folderName}") {
+        fun createRoute(folderName: String) = "folder_videos/$folderName"
+    }
 }

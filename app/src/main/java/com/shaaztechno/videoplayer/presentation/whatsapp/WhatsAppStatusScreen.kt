@@ -47,31 +47,32 @@ fun WhatsAppStatusScreen(
                         "WhatsApp Status",
                         style = MaterialTheme.typography.titleLarge.copy(
                             fontWeight = FontWeight.Bold,
-                            color = Color.White
+                            color = MaterialTheme.colorScheme.onBackground
                         )
                     )
                 },
                 navigationIcon = {
                     IconButton(onClick = onBack) {
-                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = Color.White)
+                        Icon(Icons.Default.ArrowBack, contentDescription = "Back", tint = MaterialTheme.colorScheme.onBackground)
                     }
                 },
                 actions = {
                     IconButton(onClick = { viewModel.refreshStatuses() }) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Refresh", tint = Color.White)
+                        Icon(Icons.Default.Refresh, contentDescription = "Refresh", tint = MaterialTheme.colorScheme.onBackground)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Black
+                    containerColor = MaterialTheme.colorScheme.background
                 )
             )
-        }
+        },
+        contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { paddingValues ->
         Box(
             modifier = Modifier
                 .padding(paddingValues)
                 .fillMaxSize()
-                .background(Color.Black)
+                .background(MaterialTheme.colorScheme.background)
         ) {
             if (uiState.isLoading) {
                 CircularProgressIndicator(
@@ -89,7 +90,7 @@ fun WhatsAppStatusScreen(
                     Text(
                         text = "No WhatsApp statuses available",
                         style = MaterialTheme.typography.titleMedium.copy(
-                            color = Color.White,
+                            color = MaterialTheme.colorScheme.onBackground,
                             fontWeight = FontWeight.Bold
                         ),
                         textAlign = TextAlign.Center
@@ -108,7 +109,7 @@ fun WhatsAppStatusScreen(
                         colors = ButtonDefaults.buttonColors(containerColor = ElectricGreen),
                         shape = RoundedCornerShape(8.dp)
                     ) {
-                        Text("Refresh", color = Color.Black)
+                        Text("Refresh", color = MaterialTheme.colorScheme.background)
                     }
                 }
             } else {
@@ -142,7 +143,7 @@ fun StatusItem(
             .aspectRatio(0.8f)
             .clickable(onClick = onClick),
         shape = RoundedCornerShape(12.dp),
-        colors = CardDefaults.cardColors(containerColor = Color(0xFF1A1A1A))
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
     ) {
         Box(modifier = Modifier.fillMaxSize()) {
             AsyncImage(

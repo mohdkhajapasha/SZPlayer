@@ -26,10 +26,8 @@ import com.shaaztechno.videoplayer.data.downloader.DownloadProgressItem
 import com.shaaztechno.videoplayer.domain.model.Video
 import com.shaaztechno.videoplayer.presentation.home.VideoListItem
 import com.shaaztechno.videoplayer.ui.theme.BorderSubtle
-import com.shaaztechno.videoplayer.ui.theme.CardDark
 import com.shaaztechno.videoplayer.ui.theme.ElectricGreen
 import com.shaaztechno.videoplayer.ui.theme.MutedGray
-import com.shaaztechno.videoplayer.ui.theme.PillGreen
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -49,21 +47,22 @@ fun DownloadsScreen(
                         style = MaterialTheme.typography.titleLarge.copy(
                             fontWeight = FontWeight.ExtraBold,
                             letterSpacing = 1.sp,
-                            color = Color.White
+                            color = MaterialTheme.colorScheme.onBackground
                         )
                     )
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Black
+                    containerColor = MaterialTheme.colorScheme.background
                 )
             )
-        }
+        },
+        contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { padding ->
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .background(Color.Black)
+                .background(MaterialTheme.colorScheme.background)
         ) {
             if (uiState.isLoading) {
                 Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
@@ -90,7 +89,7 @@ fun DownloadsScreen(
                             text = "No Downloads",
                             style = MaterialTheme.typography.titleMedium.copy(
                                 fontWeight = FontWeight.Bold,
-                                color = Color.White
+                                color = MaterialTheme.colorScheme.onBackground
                             )
                         )
                         Text(
@@ -140,7 +139,7 @@ fun DownloadsScreen(
                                 style = MaterialTheme.typography.labelMedium.copy(
                                     fontWeight = FontWeight.ExtraBold,
                                     letterSpacing = 1.sp,
-                                    color = Color.White
+                                    color = MaterialTheme.colorScheme.onBackground
                                 ),
                                 modifier = Modifier.padding(top = 8.dp)
                             )
@@ -156,15 +155,15 @@ fun DownloadsScreen(
                                     DropdownMenu(
                                         expanded = menuExpanded,
                                         onDismissRequest = { menuExpanded = false },
-                                        modifier = Modifier.background(Color(0xFF1E1E1E))
+                                        modifier = Modifier.background(MaterialTheme.colorScheme.surface)
                                     ) {
                                         DropdownMenuItem(
-                                            text = { Text("Share", color = Color.White) },
+                                            text = { Text("Share", color = MaterialTheme.colorScheme.onSurface) },
                                             leadingIcon = {
                                                 Icon(
                                                     Icons.Default.Share,
                                                     contentDescription = null,
-                                                    tint = Color.White
+                                                    tint = MaterialTheme.colorScheme.onSurface
                                                 )
                                             },
                                             onClick = {
@@ -207,7 +206,7 @@ private fun ActiveDownloadCard(
     Card(
         modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(16.dp),
-        colors = CardDefaults.cardColors(containerColor = CardDark),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
         border = BorderStroke(1.dp, BorderSubtle)
     ) {
         Column(
@@ -223,7 +222,7 @@ private fun ActiveDownloadCard(
                     text = item.title,
                     style = MaterialTheme.typography.titleSmall.copy(
                         fontWeight = FontWeight.Bold,
-                        color = Color.White
+                        color = MaterialTheme.colorScheme.onSurface
                     ),
                     maxLines = 1,
                     overflow = TextOverflow.Ellipsis,
@@ -245,7 +244,7 @@ private fun ActiveDownloadCard(
             val statusText = when {
                 item.isFailed -> "Download failed"
                 item.isPaused -> "Paused"
-                item.isDownloading -> "Downloading..."
+                item.isDownloading -> "Downloading…"
                 else -> "Queued"
             }
 
@@ -263,7 +262,7 @@ private fun ActiveDownloadCard(
                     .fillMaxWidth()
                     .height(6.dp),
                 color = if (item.isFailed) MaterialTheme.colorScheme.error else ElectricGreen,
-                trackColor = Color(0xFF232A25)
+                trackColor = MaterialTheme.colorScheme.background
             )
 
             // Buttons
@@ -277,7 +276,7 @@ private fun ActiveDownloadCard(
                         onClick = onResume,
                         shape = RoundedCornerShape(16.dp),
                         border = BorderStroke(1.dp, BorderSubtle),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface),
                         contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
                     ) {
                         Icon(
@@ -294,7 +293,7 @@ private fun ActiveDownloadCard(
                         onClick = onResume,
                         shape = RoundedCornerShape(16.dp),
                         border = BorderStroke(1.dp, BorderSubtle),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface),
                         contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
                     ) {
                         Icon(
@@ -311,7 +310,7 @@ private fun ActiveDownloadCard(
                         onClick = onPause,
                         shape = RoundedCornerShape(16.dp),
                         border = BorderStroke(1.dp, BorderSubtle),
-                        colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+                        colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface),
                         contentPadding = PaddingValues(horizontal = 14.dp, vertical = 6.dp)
                     ) {
                         Icon(

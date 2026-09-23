@@ -9,6 +9,7 @@ import com.shaaztechno.videoplayer.domain.repository.VideoRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
+import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 class PlayerViewModel(
@@ -20,22 +21,55 @@ class PlayerViewModel(
     private val _uiState = MutableStateFlow(PlayerUiState())
     val uiState: StateFlow<PlayerUiState> = _uiState.asStateFlow()
 
+    private var playlist: List<Video> = emptyList()
+
     init {
-        loadVideo()
+        loadVideo(videoId)
+        loadPlaylist()
     }
 
-    private fun loadVideo() {
+    private fun loadVideo(id: String) {
         viewModelScope.launch {
-            val video = repository.getVideoById(videoId)
-            val history = repository.getHistoryForVideo(videoId)
+            val video = repository.getVideoById(id)
+            val history = repository.getHistoryForVideo(id)
             if (video != null) {
                 _uiState.value = _uiState.value.copy(
                     video = video,
                     isLoading = false,
-                    initialPosition = history?.lastPosition ?: 0L
+                    initialPosition = history?.lastPosition ?: 0L,
+                    error = null
                 )
             } else {
                 _uiState.value = _uiState.value.copy(error = "Video not found", isLoading = false)
+            }
+        }
+    }
+
+    private fun loadPlaylist() {
+        viewModelScope.launch {
+            // In a real app, we might pass a folder ID or playlist ID.
+            // For now, we fetch all videos but cache them in the ViewModel to avoid O(N) repeated fetches.
+            playlist = repository.getAllVideos().first()
+        }
+    }
+
+    fun loadNextVideo(currentPosition: Long, duration: Long) {
+        val currentVideo = _uiState.value.video ?: return
+        viewModelScope.launch {
+            repository.updateHistory(
+                video = currentVideo,
+                position = currentPosition,
+                duration = duration
+            )
+
+            if (playlist.isEmpty()) {
+                playlist = repository.getAllVideos().first()
+            }
+
+            val currentIndex = playlist.indexOfFirst { it.id == currentVideo.id }
+            if (currentIndex != -1 && currentIndex < playlist.size - 1) {
+                val nextVideo = playlist[currentIndex + 1]
+                loadVideo(nextVideo.id)
             }
         }
     }

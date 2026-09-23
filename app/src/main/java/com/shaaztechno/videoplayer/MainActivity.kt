@@ -9,6 +9,7 @@ import android.util.Rational
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.setContent
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.padding
 import androidx.compose.material.icons.Icons
@@ -19,14 +20,15 @@ import androidx.compose.material.icons.filled.PlaylistPlay
 import androidx.compose.material.icons.filled.Settings
 import androidx.compose.material.icons.filled.GridView
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.remember
+import androidx.compose.runtime.*
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.core.content.FileProvider
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
+import androidx.core.view.WindowInsetsCompat
+import androidx.core.view.WindowInsetsControllerCompat
 import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -36,6 +38,7 @@ import androidx.navigation.compose.composable
 import androidx.navigation.compose.currentBackStackEntryAsState
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
+import com.shaaztechno.videoplayer.data.local.UserSettings
 import com.shaaztechno.videoplayer.domain.model.Video
 import com.shaaztechno.videoplayer.domain.model.VideoType
 import com.shaaztechno.videoplayer.presentation.addvideo.AddVideoScreen
@@ -47,6 +50,8 @@ import com.shaaztechno.videoplayer.presentation.home.HomeScreen
 import com.shaaztechno.videoplayer.presentation.home.HomeViewModel
 import com.shaaztechno.videoplayer.presentation.instagram.InstagramScreen
 import com.shaaztechno.videoplayer.presentation.instagram.InstagramViewModel
+import com.shaaztechno.videoplayer.presentation.library.FolderVideosScreen
+import com.shaaztechno.videoplayer.presentation.library.FolderVideosViewModel
 import com.shaaztechno.videoplayer.presentation.library.LibraryScreen
 import com.shaaztechno.videoplayer.presentation.library.LibraryViewModel
 import com.shaaztechno.videoplayer.presentation.navigation.Screen
@@ -65,36 +70,45 @@ import com.shaaztechno.videoplayer.presentation.whatsapp.StatusPreviewScreen
 import com.shaaztechno.videoplayer.presentation.whatsapp.WhatsAppStatusScreen
 import com.shaaztechno.videoplayer.presentation.whatsapp.WhatsAppStatusViewModel
 import com.shaaztechno.videoplayer.ui.theme.SZPlayerTheme
+import java.io.File
+import kotlinx.coroutines.flow.first
+import kotlinx.coroutines.runBlocking
 
 class MainActivity : ComponentActivity() {
 
+    private val isInPipMode = mutableStateOf(false)
+
     override fun onCreate(savedInstanceState: Bundle?) {
+        val splashScreen = installSplashScreen()
         super.onCreate(savedInstanceState)
+        
         androidx.core.view.WindowCompat.setDecorFitsSystemWindows(window, false)
-        window.statusBarColor = android.graphics.Color.TRANSPARENT
-        window.navigationBarColor = android.graphics.Color.TRANSPARENT
-        if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.R) {
-            androidx.core.view.WindowCompat.getInsetsController(window, window.decorView)?.let { controller ->
-                controller.hide(android.view.WindowInsets.Type.statusBars() or android.view.WindowInsets.Type.navigationBars())
-                controller.systemBarsBehavior = android.view.WindowInsetsController.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
-            }
-        } else {
-            @Suppress("DEPRECATION")
-            window.decorView.systemUiVisibility = (
-                    android.view.View.SYSTEM_UI_FLAG_FULLSCREEN or
-                    android.view.View.SYSTEM_UI_FLAG_HIDE_NAVIGATION or
-                    android.view.View.SYSTEM_UI_FLAG_IMMERSIVE_STICKY)
-        }
+        
+        val app = applicationContext as SZPlayerApplication
+        
+        // We can keep the splash screen visible until we have the settings
+        // However, runBlocking here is fine as it's a very fast read from DataStore
+        // and it avoids the flicker.
+        val initialSettings = runBlocking { app.settingsDataStore.settingsFlow.first() }
+
         setContent {
-            SZPlayerTheme {
+            val settings by app.settingsDataStore.settingsFlow.collectAsState(initial = initialSettings)
+            val darkMode = settings.darkMode
+
+            SZPlayerTheme(darkMode = darkMode) {
                 Surface(
                     modifier = Modifier.fillMaxSize(),
                     color = MaterialTheme.colorScheme.background
                 ) {
-                    MainScreen()
+                    MainScreen(isInPipMode.value)
                 }
             }
         }
+    }
+
+    override fun onPictureInPictureModeChanged(isInPictureInPictureMode: Boolean, newConfig: android.content.res.Configuration) {
+        super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
+        isInPipMode.value = isInPictureInPictureMode
     }
 
     fun shareVideo(video: Video) {
@@ -105,7 +119,15 @@ class MainActivity : ComponentActivity() {
                 type = "text/plain"
             } else {
                 try {
-                    val uri = Uri.parse(video.url)
+                    val uri = if (video.url.startsWith("content://")) {
+                        Uri.parse(video.url)
+                    } else {
+                        FileProvider.getUriForFile(
+                            this@MainActivity,
+                            "${applicationContext.packageName}.fileprovider",
+                            File(video.url)
+                        )
+                    }
                     putExtra(Intent.EXTRA_STREAM, uri)
                     type = "video/*"
                     addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
@@ -127,22 +149,26 @@ class MainActivity : ComponentActivity() {
             enterPictureInPictureMode(params)
         }
     }
+
+    fun setFullscreen(enabled: Boolean) {
+        val controller = WindowInsetsControllerCompat(window, window.decorView)
+        if (enabled) {
+            controller.hide(WindowInsetsCompat.Type.systemBars())
+            controller.systemBarsBehavior = WindowInsetsControllerCompat.BEHAVIOR_SHOW_TRANSIENT_BARS_BY_SWIPE
+        } else {
+            controller.show(WindowInsetsCompat.Type.systemBars())
+        }
+    }
 }
 
 @Composable
-fun MainScreen() {
+fun MainScreen(isInPipMode: Boolean) {
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
     val currentDestination = navBackStackEntry?.destination
     val context = LocalContext.current
     val activity = context as? MainActivity
     
-    data class BottomNavItem(
-        val screen: Screen,
-        val icon: androidx.compose.ui.graphics.vector.ImageVector,
-        val label: String
-    )
-
     val items = listOf(
         BottomNavItem(Screen.Home, Icons.Default.Home, "Home"),
         BottomNavItem(Screen.Library, Icons.Default.Folder, "Library"),
@@ -151,20 +177,13 @@ fun MainScreen() {
         BottomNavItem(Screen.Settings, Icons.Default.GridView, "More")
     )
 
-    val showBottomBar = currentDestination?.route != Screen.Player.route &&
-                         currentDestination?.route != Screen.AddVideo.route &&
-                         currentDestination?.route != Screen.VideoUrl.route &&
-                         currentDestination?.route != Screen.Instagram.route &&
-                         currentDestination?.route != Screen.WhatsAppStatus.route &&
-                         currentDestination?.route?.startsWith("status_preview") != true &&
-                         currentDestination?.route != Screen.Search.route &&
-                         currentDestination?.route != Screen.ContinueWatching.route
+    val showBottomBar = !isInPipMode && itemExistsInBottomNav(currentDestination?.route)
 
     Scaffold(
         bottomBar = {
             if (showBottomBar) {
                 NavigationBar(
-                    containerColor = androidx.compose.ui.graphics.Color(0xFF090D0B),
+                    containerColor = MaterialTheme.colorScheme.surface,
                     tonalElevation = 0.dp
                 ) {
                     items.forEach { item ->
@@ -201,7 +220,8 @@ fun MainScreen() {
                     }
                 }
             }
-        }
+        },
+        contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { innerPadding ->
         NavHost(
             navController = navController,
@@ -266,6 +286,32 @@ fun MainScreen() {
                     },
                     onNavigateToInstagram = {
                         navController.navigate(Screen.Instagram.route)
+                    },
+                    onFolderClick = { folderName ->
+                        navController.navigate(Screen.FolderVideos.createRoute(folderName))
+                    }
+                )
+            }
+            composable(
+                route = Screen.FolderVideos.route,
+                arguments = listOf(
+                    navArgument("folderName") { type = NavType.StringType }
+                )
+            ) { backStackEntry ->
+                val folderName = backStackEntry.arguments?.getString("folderName") ?: return@composable
+                val app = context.applicationContext as SZPlayerApplication
+                val viewModel: FolderVideosViewModel = viewModel(
+                    factory = FolderVideosViewModel.Factory(folderName, app.videoRepository, app.database.playlistDao())
+                )
+                FolderVideosScreen(
+                    folderName = folderName,
+                    viewModel = viewModel,
+                    onVideoClick = { video ->
+                        navController.navigate(Screen.Player.createRoute(video.id))
+                    },
+                    onBack = { navController.popBackStack() },
+                    onShareClick = { video ->
+                        activity?.shareVideo(video)
                     }
                 )
             }
@@ -494,3 +540,20 @@ fun MainScreen() {
         }
     }
 }
+
+private fun itemExistsInBottomNav(route: String?): Boolean {
+    val bottomNavRoutes = listOf(
+        Screen.Home.route,
+        Screen.Library.route,
+        Screen.Playlists.route,
+        Screen.Downloads.route,
+        Screen.Settings.route
+    )
+    return bottomNavRoutes.contains(route)
+}
+
+data class BottomNavItem(
+    val screen: Screen,
+    val icon: androidx.compose.ui.graphics.vector.ImageVector,
+    val label: String
+)

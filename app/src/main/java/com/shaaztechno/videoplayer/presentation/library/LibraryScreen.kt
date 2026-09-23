@@ -76,29 +76,29 @@ fun LibraryScreen(
                 actions = {
                     Box {
                         IconButton(onClick = { showSortMenu = true }) {
-                            Icon(Icons.Default.Sort, contentDescription = "Sort Videos", tint = Color.White)
+                            Icon(Icons.Default.Sort, contentDescription = "Sort Videos", tint = MaterialTheme.colorScheme.onBackground)
                         }
                         DropdownMenu(
                             expanded = showSortMenu,
                             onDismissRequest = { showSortMenu = false },
-                            modifier = Modifier.background(Color(0xFF1E1E1E))
+                            modifier = Modifier.background(MaterialTheme.colorScheme.surface)
                         ) {
                             DropdownMenuItem(
-                                text = { Text("Sort by Name", color = if (uiState.sortOrder == SortOrder.NAME) ElectricGreen else Color.White) },
+                                text = { Text("Sort by Name", color = if (uiState.sortOrder == SortOrder.NAME) ElectricGreen else MaterialTheme.colorScheme.onSurface) },
                                 onClick = {
                                     viewModel.setSortOrder(SortOrder.NAME)
                                     showSortMenu = false
                                 }
                             )
                             DropdownMenuItem(
-                                text = { Text("Sort by Date", color = if (uiState.sortOrder == SortOrder.DATE) ElectricGreen else Color.White) },
+                                text = { Text("Sort by Date", color = if (uiState.sortOrder == SortOrder.DATE) ElectricGreen else MaterialTheme.colorScheme.onSurface) },
                                 onClick = {
                                     viewModel.setSortOrder(SortOrder.DATE)
                                     showSortMenu = false
                                 }
                             )
                             DropdownMenuItem(
-                                text = { Text("Sort by Size", color = if (uiState.sortOrder == SortOrder.SIZE) ElectricGreen else Color.White) },
+                                text = { Text("Sort by Size", color = if (uiState.sortOrder == SortOrder.SIZE) ElectricGreen else MaterialTheme.colorScheme.onSurface) },
                                 onClick = {
                                     viewModel.setSortOrder(SortOrder.SIZE)
                                     showSortMenu = false
@@ -110,24 +110,25 @@ fun LibraryScreen(
                         Icon(
                             if (uiState.isFolderView) Icons.Default.ViewList else Icons.Default.Folder,
                             contentDescription = "Toggle View",
-                            tint = Color.White
+                            tint = MaterialTheme.colorScheme.onBackground
                         )
                     }
                     IconButton(onClick = { viewModel.refresh() }) {
-                        Icon(Icons.Default.Refresh, contentDescription = "Refresh", tint = Color.White)
+                        Icon(Icons.Default.Refresh, contentDescription = "Refresh", tint = MaterialTheme.colorScheme.onBackground)
                     }
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
-                    containerColor = Color.Black
+                    containerColor = MaterialTheme.colorScheme.background
                 )
             )
-        }
+        },
+        contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { padding ->
         Box(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
-                .background(Color.Black)
+                .background(MaterialTheme.colorScheme.background)
         ) {
             if (uiState.isLoading) {
                 CircularProgressIndicator(modifier = Modifier.align(Alignment.Center), color = ElectricGreen)
@@ -146,7 +147,7 @@ fun LibraryScreen(
                     Text("No local videos found", color = Color.Gray)
                     Button(
                         onClick = { viewModel.refresh() },
-                        colors = ButtonDefaults.buttonColors(containerColor = ElectricGreen, contentColor = Color.Black),
+                        colors = ButtonDefaults.buttonColors(containerColor = ElectricGreen, contentColor = MaterialTheme.colorScheme.background),
                         modifier = Modifier.padding(top = 16.dp)
                     ) {
                         Text("Scan Device")
@@ -169,15 +170,15 @@ fun LibraryScreen(
                                         DropdownMenu(
                                             expanded = menuExpanded,
                                             onDismissRequest = { menuExpanded = false },
-                                            modifier = Modifier.background(Color(0xFF1E1E1E))
+                                            modifier = Modifier.background(MaterialTheme.colorScheme.surface)
                                         ) {
                                             DropdownMenuItem(
-                                                text = { Text("Play", color = Color.White) },
+                                                text = { Text("Play", color = MaterialTheme.colorScheme.onSurface) },
                                                 leadingIcon = {
                                                     Icon(
                                                         Icons.Default.PlayArrow,
                                                         contentDescription = null,
-                                                        tint = Color.White
+                                                        tint = MaterialTheme.colorScheme.onSurface
                                                     )
                                                 },
                                                 onClick = {
@@ -186,12 +187,12 @@ fun LibraryScreen(
                                                 }
                                             )
                                             DropdownMenuItem(
-                                                text = { Text("Add to Playlist", color = Color.White) },
+                                                text = { Text("Add to Playlist", color = MaterialTheme.colorScheme.onSurface) },
                                                 leadingIcon = {
                                                     Icon(
                                                         Icons.Default.PlaylistAdd,
                                                         contentDescription = null,
-                                                        tint = Color.White
+                                                        tint = MaterialTheme.colorScheme.onSurface
                                                     )
                                                 },
                                                 onClick = {
@@ -200,12 +201,12 @@ fun LibraryScreen(
                                                 }
                                             )
                                             DropdownMenuItem(
-                                                text = { Text("Rename", color = Color.White) },
+                                                text = { Text("Rename", color = MaterialTheme.colorScheme.onSurface) },
                                                 leadingIcon = {
                                                     Icon(
                                                         Icons.Default.Edit,
                                                         contentDescription = null,
-                                                        tint = Color.White
+                                                        tint = MaterialTheme.colorScheme.onSurface
                                                     )
                                                 },
                                                 onClick = {
@@ -215,12 +216,12 @@ fun LibraryScreen(
                                                 }
                                             )
                                             DropdownMenuItem(
-                                                text = { Text("Share", color = Color.White) },
+                                                text = { Text("Share", color = MaterialTheme.colorScheme.onSurface) },
                                                 leadingIcon = {
                                                     Icon(
                                                         Icons.Default.Share,
                                                         contentDescription = null,
-                                                        tint = Color.White
+                                                        tint = MaterialTheme.colorScheme.onSurface
                                                     )
                                                 },
                                                 onClick = {
@@ -258,15 +259,15 @@ fun LibraryScreen(
                                         DropdownMenu(
                                             expanded = menuExpanded,
                                             onDismissRequest = { menuExpanded = false },
-                                            modifier = Modifier.background(Color(0xFF1E1E1E))
+                                            modifier = Modifier.background(MaterialTheme.colorScheme.surface)
                                         ) {
                                             DropdownMenuItem(
-                                                text = { Text("Play", color = Color.White) },
+                                                text = { Text("Play", color = MaterialTheme.colorScheme.onSurface) },
                                                 leadingIcon = {
                                                     Icon(
                                                         Icons.Default.PlayArrow,
                                                         contentDescription = null,
-                                                        tint = Color.White
+                                                        tint = MaterialTheme.colorScheme.onSurface
                                                     )
                                                 },
                                                 onClick = {
@@ -275,12 +276,12 @@ fun LibraryScreen(
                                                 }
                                             )
                                             DropdownMenuItem(
-                                                text = { Text("Add to Playlist", color = Color.White) },
+                                                text = { Text("Add to Playlist", color = MaterialTheme.colorScheme.onSurface) },
                                                 leadingIcon = {
                                                     Icon(
                                                         Icons.Default.PlaylistAdd,
                                                         contentDescription = null,
-                                                        tint = Color.White
+                                                        tint = MaterialTheme.colorScheme.onSurface
                                                     )
                                                 },
                                                 onClick = {
@@ -289,12 +290,12 @@ fun LibraryScreen(
                                                 }
                                             )
                                             DropdownMenuItem(
-                                                text = { Text("Rename", color = Color.White) },
+                                                text = { Text("Rename", color = MaterialTheme.colorScheme.onSurface) },
                                                 leadingIcon = {
                                                     Icon(
                                                         Icons.Default.Edit,
                                                         contentDescription = null,
-                                                        tint = Color.White
+                                                        tint = MaterialTheme.colorScheme.onSurface
                                                     )
                                                 },
                                                 onClick = {
@@ -304,12 +305,12 @@ fun LibraryScreen(
                                                 }
                                             )
                                             DropdownMenuItem(
-                                                text = { Text("Share", color = Color.White) },
+                                                text = { Text("Share", color = MaterialTheme.colorScheme.onSurface) },
                                                 leadingIcon = {
                                                     Icon(
                                                         Icons.Default.Share,
                                                         contentDescription = null,
-                                                        tint = Color.White
+                                                        tint = MaterialTheme.colorScheme.onSurface
                                                     )
                                                 },
                                                 onClick = {
@@ -345,7 +346,7 @@ fun LibraryScreen(
             showRenameDialog?.let { video ->
                 AlertDialog(
                     onDismissRequest = { showRenameDialog = null },
-                    title = { Text("Rename Video", color = Color.White) },
+                    title = { Text("Rename Video", color = MaterialTheme.colorScheme.onSurface) },
                     text = {
                         OutlinedTextField(
                             value = renameTitleText,
@@ -353,8 +354,8 @@ fun LibraryScreen(
                             label = { Text("Title") },
                             singleLine = true,
                             colors = OutlinedTextFieldDefaults.colors(
-                                focusedTextColor = Color.White,
-                                unfocusedTextColor = Color.White,
+                                focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                                unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
                                 focusedBorderColor = ElectricGreen
                             )
                         )
@@ -373,10 +374,10 @@ fun LibraryScreen(
                     },
                     dismissButton = {
                         TextButton(onClick = { showRenameDialog = null }) {
-                            Text("Cancel", color = Color.White)
+                            Text("Cancel", color = MaterialTheme.colorScheme.onSurface)
                         }
                     },
-                    containerColor = Color(0xFF1E1E1E)
+                    containerColor = MaterialTheme.colorScheme.surface
                 )
             }
 
@@ -384,8 +385,8 @@ fun LibraryScreen(
             showDeleteDialog?.let { video ->
                 AlertDialog(
                     onDismissRequest = { showDeleteDialog = null },
-                    title = { Text("Delete Video", color = Color.White) },
-                    text = { Text("Are you sure you want to remove this video from the library?", color = Color.LightGray) },
+                    title = { Text("Delete Video", color = MaterialTheme.colorScheme.onSurface) },
+                    text = { Text("Are you sure you want to remove this video from the library?", color = Color.Gray) },
                     confirmButton = {
                         TextButton(
                             onClick = {
@@ -398,10 +399,10 @@ fun LibraryScreen(
                     },
                     dismissButton = {
                         TextButton(onClick = { showDeleteDialog = null }) {
-                            Text("Cancel", color = Color.White)
+                            Text("Cancel", color = MaterialTheme.colorScheme.onSurface)
                         }
                     },
-                    containerColor = Color(0xFF1E1E1E)
+                    containerColor = MaterialTheme.colorScheme.surface
                 )
             }
 
@@ -409,7 +410,7 @@ fun LibraryScreen(
             showPlaylistDialog?.let { video ->
                 AlertDialog(
                     onDismissRequest = { showPlaylistDialog = null },
-                    title = { Text("Add to Playlist", color = Color.White) },
+                    title = { Text("Add to Playlist", color = MaterialTheme.colorScheme.onSurface) },
                     text = {
                         Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
                             if (uiState.playlists.isEmpty()) {
@@ -428,7 +429,7 @@ fun LibraryScreen(
                                     ) {
                                         Icon(Icons.Default.PlaylistPlay, contentDescription = null, tint = ElectricGreen)
                                         Spacer(Modifier.width(12.dp))
-                                        Text(playlist.name, color = Color.White)
+                                        Text(playlist.name, color = MaterialTheme.colorScheme.onSurface)
                                     }
                                 }
                             }
@@ -440,8 +441,8 @@ fun LibraryScreen(
                                     label = { Text("Playlist Name") },
                                     singleLine = true,
                                     colors = OutlinedTextFieldDefaults.colors(
-                                        focusedTextColor = Color.White,
-                                        unfocusedTextColor = Color.White,
+                                        focusedTextColor = MaterialTheme.colorScheme.onSurface,
+                                        unfocusedTextColor = MaterialTheme.colorScheme.onSurface,
                                         focusedBorderColor = ElectricGreen
                                     )
                                 )
@@ -454,7 +455,7 @@ fun LibraryScreen(
                                             showCreatePlaylistInDialog = false
                                         }
                                     },
-                                    colors = ButtonDefaults.buttonColors(containerColor = ElectricGreen, contentColor = Color.Black)
+                                    colors = ButtonDefaults.buttonColors(containerColor = ElectricGreen, contentColor = MaterialTheme.colorScheme.background)
                                 ) {
                                     Text("Create Playlist")
                                 }
@@ -469,10 +470,10 @@ fun LibraryScreen(
                     },
                     confirmButton = {
                         TextButton(onClick = { showPlaylistDialog = null }) {
-                            Text("Done", color = Color.White)
+                            Text("Done", color = MaterialTheme.colorScheme.onSurface)
                         }
                     },
-                    containerColor = Color(0xFF1E1E1E)
+                    containerColor = MaterialTheme.colorScheme.surface
                 )
             }
         }
@@ -484,7 +485,7 @@ fun FolderHeader(name: String, count: Int) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
-            .background(Color(0xFF121212))
+            .background(MaterialTheme.colorScheme.surface)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -492,17 +493,17 @@ fun FolderHeader(name: String, count: Int) {
         Spacer(Modifier.width(12.dp))
         Text(
             text = name,
-            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = Color.White),
+            style = MaterialTheme.typography.titleSmall.copy(fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onSurface),
             modifier = Modifier.weight(1f)
         )
         Surface(
-            color = Color.DarkGray,
+            color = MaterialTheme.colorScheme.background,
             shape = RoundedCornerShape(4.dp)
         ) {
             Text(
                 text = count.toString(),
                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
-                style = MaterialTheme.typography.labelSmall.copy(color = Color.White)
+                style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onBackground)
             )
         }
     }
