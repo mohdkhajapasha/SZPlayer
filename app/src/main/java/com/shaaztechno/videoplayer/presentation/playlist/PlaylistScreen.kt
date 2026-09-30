@@ -33,7 +33,8 @@ fun PlaylistScreen(
                 title = { Text("Playlists", fontWeight = FontWeight.Bold, color = MaterialTheme.colorScheme.onBackground) },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background
-                )
+                ),
+                windowInsets = WindowInsets.statusBars
             )
         },
         floatingActionButton = {

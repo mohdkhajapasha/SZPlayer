@@ -132,22 +132,30 @@ class VideoRepositoryImpl(
         videoDao.insertVideo(video.toEntity())
     }
 
-    override suspend fun deleteVideo(id: String) {
-        withContext(Dispatchers.IO) {
+    override suspend fun deleteVideo(id: String): Result<Unit> = withContext(Dispatchers.IO) {
+        try {
             val video = videoDao.getVideoById(id)
             if (video != null) {
+                var physicalDeleted = true
                 if (video.type == VideoType.DOWNLOADED.name || video.type == VideoType.LOCAL.name) {
-                    try {
-                        val uri = Uri.parse(video.url)
-                        if (uri.scheme == "content") {
-                            context.contentResolver.delete(uri, null, null)
-                        }
-                    } catch (e: Exception) {
-                        e.printStackTrace()
+                    val uri = Uri.parse(video.url)
+                    if (uri.scheme == "content") {
+                        val rowsDeleted = context.contentResolver.delete(uri, null, null)
+                        physicalDeleted = rowsDeleted > 0
                     }
                 }
-                videoDao.deleteVideo(id)
+                
+                if (physicalDeleted) {
+                    videoDao.deleteVideo(id)
+                    Result.success(Unit)
+                } else {
+                    Result.failure(Exception("Failed to delete physical file"))
+                }
+            } else {
+                Result.failure(Exception("Video not found in database"))
             }
+        } catch (e: Exception) {
+            Result.failure(e)
         }
     }
 
@@ -178,10 +186,10 @@ class VideoRepositoryImpl(
                 )
             )
 
-            // Limit history to 10 records
+            // Limit history to 20 records
             val history = historyDao.getHistory().first()
-            if (history.size > 10) {
-                val recordsToDelete = history.drop(10)
+            if (history.size > 20) {
+                val recordsToDelete = history.drop(20)
                 recordsToDelete.forEach {
                     historyDao.deleteHistory(it.videoId)
                 }

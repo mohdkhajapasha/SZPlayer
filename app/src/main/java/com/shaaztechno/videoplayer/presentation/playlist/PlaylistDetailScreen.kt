@@ -39,7 +39,8 @@ fun PlaylistDetailScreen(
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background
-                )
+                ),
+                windowInsets = WindowInsets.statusBars
             )
         },
         contentWindowInsets = WindowInsets(0, 0, 0, 0)
@@ -55,7 +56,7 @@ fun PlaylistDetailScreen(
                 Text("No videos in this playlist.", modifier = Modifier.align(Alignment.Center), color = MaterialTheme.colorScheme.onBackground)
             } else {
                 LazyColumn(modifier = Modifier.fillMaxSize()) {
-                    items(uiState.videos) { video ->
+                    items(uiState.videos, key = { it.id }) { video ->
                         VideoListItem(
                             video = video,
                             onClick = { onVideoClick(video) },

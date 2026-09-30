@@ -40,8 +40,6 @@
     <!-- Add Video Screen Strings -->
     <string name="add_video_title">ADD VIDEO</string>
     <string name="add_video_msg">Select an option to add or stream videos</string>
-    <string name="whatsapp_status">WhatsApp Status</string>
-    <string name="whatsapp_status_sub">Save and share WhatsApp status updates</string>
     <string name="video_url">Video URL</string>
     <string name="video_url_sub">Play or download a video from a URL</string>
     <string name="instagram_reel">Instagram Reel</string>

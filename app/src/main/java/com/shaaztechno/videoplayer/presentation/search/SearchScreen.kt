@@ -6,10 +6,12 @@ import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
+import androidx.compose.material.icons.filled.Delete
+import androidx.compose.material.icons.filled.PlayArrow
+import androidx.compose.material.icons.filled.PlaylistAdd
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -69,14 +71,13 @@ fun SearchScreen(
                 .padding(padding)
                 .background(MaterialTheme.colorScheme.background)
         ) {
-            // Filter row using SingleSelect PrimaryTabRow / TabRow or FilterChips
             TabRow(
                 selectedTabIndex = filterMode.ordinal,
                 containerColor = Color.Transparent,
                 contentColor = ElectricGreen,
                 divider = { Divider(color = Color.DarkGray) }
             ) {
-                SearchFilterMode.values().forEach { mode ->
+                SearchFilterMode.entries.forEach { mode ->
                     Tab(
                         selected = filterMode == mode,
                         onClick = { viewModel.setFilterMode(mode) },
@@ -97,11 +98,40 @@ fun SearchScreen(
                 }
             } else {
                 LazyColumn(modifier = Modifier.fillMaxSize()) {
-                    items(uiState.results) { video ->
+                    items(uiState.results, key = { it.id }) { video ->
+                        var menuExpanded by remember { mutableStateOf(false) }
                         VideoListItem(
                             video = video,
                             onClick = { onVideoClick(video) },
-                            onShare = { onShareClick(video) }
+                            onShare = { menuExpanded = true },
+                            dropdownContent = {
+                                DropdownMenu(
+                                    expanded = menuExpanded,
+                                    onDismissRequest = { menuExpanded = false },
+                                    modifier = Modifier.background(MaterialTheme.colorScheme.surface)
+                                ) {
+                                    DropdownMenuItem(
+                                        text = { Text("Play", color = MaterialTheme.colorScheme.onSurface) },
+                                        leadingIcon = {
+                                            Icon(Icons.Default.PlayArrow, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface)
+                                        },
+                                        onClick = {
+                                            menuExpanded = false
+                                            onVideoClick(video)
+                                        }
+                                    )
+                                    DropdownMenuItem(
+                                        text = { Text("Share", color = MaterialTheme.colorScheme.onSurface) },
+                                        leadingIcon = {
+                                            Icon(Icons.Default.Share, contentDescription = null, tint = MaterialTheme.colorScheme.onSurface)
+                                        },
+                                        onClick = {
+                                            menuExpanded = false
+                                            onShareClick(video)
+                                        }
+                                    )
+                                }
+                            }
                         )
                     }
                 }

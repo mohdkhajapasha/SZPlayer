@@ -85,6 +85,10 @@ class PlayerViewModel(
         }
     }
 
+    fun setError(message: String?) {
+        _uiState.value = _uiState.value.copy(error = message, isLoading = false)
+    }
+
     fun deleteVideo(onDeleted: () -> Unit) {
         val video = _uiState.value.video ?: return
         viewModelScope.launch {

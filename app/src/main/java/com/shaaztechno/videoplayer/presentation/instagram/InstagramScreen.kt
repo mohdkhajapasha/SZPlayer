@@ -5,6 +5,7 @@ import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
@@ -20,7 +21,9 @@ import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import com.shaaztechno.videoplayer.presentation.components.BannerAd
 import com.shaaztechno.videoplayer.ui.theme.*
 import java.util.Locale
 
@@ -48,7 +51,11 @@ fun InstagramScreen(
                 )
             )
         },
-        containerColor = Black
+        bottomBar = {
+            BannerAd(modifier = Modifier.navigationBarsPadding())
+        },
+        containerColor = Black,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { paddingValues ->
         Column(
             modifier = Modifier
@@ -101,6 +108,8 @@ fun UrlInputSection(
     isLoading: Boolean,
     errorMessage: String?
 ) {
+    val clipboardManager = androidx.compose.ui.platform.LocalClipboardManager.current
+    
     Card(
         modifier = Modifier.fillMaxWidth(),
         colors = CardDefaults.cardColors(containerColor = CardDark),
@@ -143,6 +152,15 @@ fun UrlInputSection(
                         IconButton(onClick = { onUrlChange("") }) {
                             Icon(Icons.Rounded.Close, contentDescription = "Clear", tint = MutedGray)
                         }
+                    } else {
+                        IconButton(onClick = {
+                            val clipText = clipboardManager.getText()?.text
+                            if (!clipText.isNullOrBlank()) {
+                                onUrlChange(clipText)
+                            }
+                        }) {
+                            Icon(Icons.Rounded.ContentPaste, contentDescription = "Paste from clipboard", tint = ElectricGreen)
+                        }
                     }
                 }
             )
@@ -158,24 +176,54 @@ fun UrlInputSection(
 
             Spacer(modifier = Modifier.height(24.dp))
 
-            Button(
-                onClick = onFetch,
+            Row(
                 modifier = Modifier.fillMaxWidth(),
-                enabled = !isLoading && url.isNotBlank(),
-                colors = ButtonDefaults.buttonColors(
-                    containerColor = ElectricGreen,
-                    contentColor = Black
-                ),
-                shape = RoundedCornerShape(12.dp)
+                horizontalArrangement = Arrangement.spacedBy(12.dp),
+                verticalAlignment = Alignment.CenterVertically
             ) {
-                if (isLoading) {
-                    CircularProgressIndicator(
-                        modifier = Modifier.size(24.dp),
-                        color = Black,
-                        strokeWidth = 2.dp
+                OutlinedButton(
+                    onClick = {
+                        val clipText = clipboardManager.getText()?.text
+                        if (!clipText.isNullOrBlank()) {
+                            onUrlChange(clipText)
+                        }
+                    },
+                    shape = RoundedCornerShape(12.dp),
+                    border = BorderStroke(1.dp, BorderSubtle),
+                    colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.White),
+                    modifier = Modifier.height(48.dp)
+                ) {
+                    Icon(
+                        imageVector = Icons.Rounded.ContentPaste,
+                        contentDescription = null,
+                        modifier = Modifier.size(16.dp),
+                        tint = ElectricGreen
                     )
-                } else {
-                    Text("Fetch Reel", fontWeight = FontWeight.Bold)
+                    Spacer(modifier = Modifier.width(8.dp))
+                    Text("Paste", fontSize = 13.sp, fontWeight = FontWeight.Bold)
+                }
+
+                Button(
+                    onClick = onFetch,
+                    modifier = Modifier
+                        .weight(1f)
+                        .height(48.dp),
+                    enabled = !isLoading && url.isNotBlank(),
+                    colors = ButtonDefaults.buttonColors(
+                        containerColor = ElectricGreen,
+                        contentColor = Black
+                    ),
+                    shape = RoundedCornerShape(12.dp)
+                ) {
+                    if (isLoading) {
+                        CircularProgressIndicator(
+                            modifier = Modifier.size(24.dp),
+                            color = Black,
+                            strokeWidth = 2.dp
+                        )
+                    } else {
+                        Text("Fetch Reel", fontWeight = FontWeight.Bold)
+                    }
                 }
             }
         }

@@ -1,8 +1,6 @@
 package com.shaaztechno.videoplayer.presentation.home
 
 import android.Manifest
-import android.app.Activity
-import android.content.pm.ActivityInfo
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -38,6 +36,7 @@ import coil.compose.AsyncImage
 import com.shaaztechno.videoplayer.R
 import com.shaaztechno.videoplayer.data.local.entity.HistoryEntity
 import com.shaaztechno.videoplayer.domain.model.Video
+import com.shaaztechno.videoplayer.presentation.components.BannerAd
 import com.shaaztechno.videoplayer.ui.theme.ElectricGreen
 import com.shaaztechno.videoplayer.ui.theme.MutedGray
 
@@ -54,20 +53,11 @@ fun HomeScreen(
     onNavigateToSettings: () -> Unit = {},
     onNavigateToContinueWatching: () -> Unit = {},
     onPlaylistClick: (Long, String) -> Unit = { _, _ -> },
-    onNavigateToWhatsAppStatus: () -> Unit = {},
     onNavigateToVideoUrl: () -> Unit = {},
     onNavigateToInstagram: () -> Unit = {},
     onFolderClick: (String) -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
-    val context = LocalContext.current
-    val activity = context as? Activity
-
-    // Fix orientation to portrait for HomeScreen
-    DisposableEffect(Unit) {
-        activity?.requestedOrientation = ActivityInfo.SCREEN_ORIENTATION_PORTRAIT
-        onDispose { }
-    }
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -151,7 +141,8 @@ fun HomeScreen(
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background
-                )
+                ),
+                windowInsets = WindowInsets.statusBars
             )
         },
         floatingActionButton = {
@@ -185,18 +176,14 @@ fun HomeScreen(
                     onViewAllClick = onNavigateToContinueWatching
                 )
                 val activeHistory = uiState.recentlyPlayed.firstOrNull()
-                ContinueWatchingCard(
-                    history = activeHistory,
-                    onClick = {
-                        if (activeHistory != null) {
-                            onVideoClick(activeHistory.toVideo())
-                        } else if (uiState.localVideos.isNotEmpty()) {
-                            onVideoClick(uiState.localVideos.first())
-                        } else {
-                            onNavigateToLibrary()
-                        }
-                    }
-                )
+                if (activeHistory != null) {
+                    ContinueWatchingCard(
+                        history = activeHistory,
+                        onClick = { onVideoClick(activeHistory.toVideo()) }
+                    )
+                } else {
+                    EmptyStateCard(text = "No videos to continue watching", onAction = onNavigateToLibrary, actionText = "Browse Videos")
+                }
             }
 
             // 2. Recently Played Section
@@ -204,9 +191,10 @@ fun HomeScreen(
                 Spacer(modifier = Modifier.height(16.dp))
                 SectionHeader(
                     title = "Recently Played",
-                    showViewAll = true,
+                    showViewAll = uiState.recentlyPlayed.size > 1,
                     onViewAllClick = onNavigateToContinueWatching
                 )
+
                 val historyList = if (uiState.recentlyPlayed.size > 1) {
                     uiState.recentlyPlayed.drop(1)
                 } else {
@@ -218,7 +206,7 @@ fun HomeScreen(
                         contentPadding = PaddingValues(horizontal = 16.dp),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        items(historyList) { history ->
+                        items(historyList, key = { it.videoId }) { history ->
                             val progress = if (history.duration > 0) history.lastPosition.toFloat() / history.duration else 0f
                             RecentVideoCard(
                                 title = history.title,
@@ -231,46 +219,18 @@ fun HomeScreen(
                         }
                     }
                 } else {
-                    // Display mockup items matching Image 2 perfectly
-                    LazyRow(
-                        contentPadding = PaddingValues(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        item {
-                            RecentVideoCard(
-                                title = "3.mp4",
-                                durationText = "94:48",
-                                dateText = "2 days ago",
-                                thumbnailUrl = "https://images.unsplash.com/photo-1518709268805-4e9042af9f23?w=500",
-                                onClick = {
-                                    uiState.localVideos.find { it.title.contains("3") }?.let(onVideoClick) ?: onNavigateToLibrary()
-                                }
-                            )
-                        }
-                        item {
-                            RecentVideoCard(
-                                title = "Video-55092.mp4",
-                                durationText = "59:02",
-                                dateText = "3 days ago",
-                                thumbnailUrl = "https://images.unsplash.com/photo-1564769625905-50e93615e769?w=500",
-                                onClick = {
-                                    uiState.localVideos.find { it.title.contains("55092") }?.let(onVideoClick) ?: onNavigateToLibrary()
-                                }
-                            )
-                        }
-                        item {
-                            RecentVideoCard(
-                                title = "video.mp4",
-                                durationText = "12:34",
-                                dateText = "4 days ago",
-                                thumbnailUrl = "https://images.unsplash.com/photo-1506744038136-46273834b3fb?w=500",
-                                onClick = {
-                                    uiState.localVideos.firstOrNull()?.let(onVideoClick) ?: onNavigateToLibrary()
-                                }
-                            )
-                        }
-                    }
+                    Text(
+                        "No recently played videos",
+                        color = MutedGray,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(horizontal = 20.dp)
+                    )
                 }
+            }
+
+            // Ad below recent
+            item {
+                BannerAd(modifier = Modifier.padding(top = 16.dp))
             }
 
             // 3. My Playlists Section
@@ -287,7 +247,7 @@ fun HomeScreen(
                         contentPadding = PaddingValues(horizontal = 16.dp),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        items(uiState.playlists) { playlist ->
+                        items(uiState.playlists, key = { it.id }) { playlist ->
                             PlaylistHeroCard(
                                 name = playlist.name,
                                 videoCount = "Playlist",
@@ -308,18 +268,14 @@ fun HomeScreen(
                     showViewAll = true,
                     onViewAllClick = onNavigateToLibrary
                 )
-                val folderList = if (uiState.folders.isNotEmpty()) {
-                    uiState.folders.entries.toList()
-                } else {
-                    emptyList()
-                }
 
-                if (folderList.isNotEmpty()) {
+                if (uiState.folders.isNotEmpty()) {
+                    val folderList = uiState.folders.entries.toList()
                     LazyRow(
                         contentPadding = PaddingValues(horizontal = 16.dp),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        items(folderList) { (folderName, videos) ->
+                        items(folderList, key = { it.key }) { (folderName, videos) ->
                             LocalFolderCard(
                                 name = folderName,
                                 countText = "${videos.size} videos",
@@ -328,42 +284,22 @@ fun HomeScreen(
                         }
                     }
                 } else {
-                    LazyRow(
-                        contentPadding = PaddingValues(horizontal = 16.dp),
-                        horizontalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        item {
-                            LocalFolderCard(
-                                name = "Movies",
-                                countText = "24 videos",
-                                onClick = { onFolderClick("Movies") }
-                            )
-                        }
-                        item {
-                            LocalFolderCard(
-                                name = "Downloads",
-                                countText = "8 videos",
-                                onClick = { onFolderClick("Downloads") }
-                            )
-                        }
-                        item {
-                            LocalFolderCard(
-                                name = "Camera",
-                                countText = "32 videos",
-                                onClick = { onFolderClick("Camera") }
-                            )
-                        }
-                    }
+                    Text(
+                        "No local video folders",
+                        color = MutedGray,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(horizontal = 20.dp)
+                    )
                 }
             }
 
-            // 6. Online Videos Section (if available)
+            // 6. Online Videos Section
             if (uiState.onlineVideos.isNotEmpty()) {
                 item {
                     Spacer(modifier = Modifier.height(16.dp))
                     SectionHeader(title = "Online Catalog", showViewAll = false)
                 }
-                items(uiState.onlineVideos) { video ->
+                items(uiState.onlineVideos, key = { it.id }) { video ->
                     val progress = uiState.historyMap[video.id] ?: 0f
                     var menuExpanded by remember { mutableStateOf(false) }
                     VideoListItem(
@@ -422,6 +358,29 @@ fun HomeScreen(
             item {
                 Spacer(modifier = Modifier.height(90.dp))
             }
+        }
+    }
+}
+
+@Composable
+fun EmptyStateCard(text: String, onAction: () -> Unit, actionText: String) {
+    Card(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(120.dp)
+            .padding(horizontal = 16.dp)
+            .clickable { onAction() },
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface.copy(alpha = 0.5f))
+    ) {
+        Column(
+            modifier = Modifier.fillMaxSize(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.Center
+        ) {
+            Text(text = text, color = MutedGray, style = MaterialTheme.typography.bodyMedium)
+            Spacer(modifier = Modifier.height(8.dp))
+            Text(text = actionText, color = ElectricGreen, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Bold)
         }
     }
 }
@@ -488,25 +447,24 @@ fun ContinueWatchingCard(
     history: HistoryEntity?,
     onClick: () -> Unit
 ) {
-    val displayTitle = history?.title ?: "Bigg Boss Season 20 Episode 1"
+    val displayTitle = history?.title ?: ""
     val displaySubtitle = if (history != null) {
         "Continue Watching • ${formatDuration(history.lastPosition)}"
     } else {
-        "Reality Show  •  S20 E1  •  2025"
+        ""
     }
     val displayImage = history?.thumbnailUrl ?: history?.url
-        ?: "https://images.unsplash.com/photo-1574375927938-d5a98e8ffe85?w=800"
 
     val progress = if (history != null && history.duration > 0) {
         (history.lastPosition.toFloat() / history.duration).coerceIn(0f, 1f)
     } else {
-        0.054f // 05:05 of 94:48
+        0f
     }
 
     val timeLabel = if (history != null) {
         "${formatDuration(history.lastPosition)} / ${formatDuration(history.duration)}"
     } else {
-        "05:05 / 94:48"
+        ""
     }
 
     Card(
@@ -1024,7 +982,7 @@ fun VideoListItem(
                     .clip(RoundedCornerShape(12.dp)),
                 contentScale = ContentScale.Crop
             )
-            
+
             if (progress > 0) {
                 LinearProgressIndicator(
                     progress = progress,
@@ -1082,7 +1040,7 @@ private fun formatDuration(ms: Long): String {
 }
 
 private fun formatRelativeDate(timestamp: Long): String {
-    if (timestamp <= 0) return "2 days ago"
+    if (timestamp <= 0) return ""
     val now = System.currentTimeMillis()
     val timeMs = if (timestamp < 10000000000L) timestamp * 1000 else timestamp
     val diff = now - timeMs

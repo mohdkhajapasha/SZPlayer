@@ -34,7 +34,6 @@ import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import okhttp3.OkHttpClient
-import okhttp3.Request
 import java.io.File
 import java.util.concurrent.Executors
 
@@ -70,7 +69,7 @@ class SZDownloadManager private constructor(
     }
 
     val httpDataSourceFactory: DataSource.Factory = DefaultHttpDataSource.Factory()
-        .setUserAgent("SZPlayer/1.0 (Linux; Android)")
+        .setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
         .setConnectTimeoutMs(15000)
         .setReadTimeoutMs(15000)
         .setAllowCrossProtocolRedirects(true)
@@ -97,6 +96,12 @@ class SZDownloadManager private constructor(
 
     private val _downloads = MutableStateFlow<List<DownloadProgressItem>>(emptyList())
     val downloads: StateFlow<List<DownloadProgressItem>> = _downloads.asStateFlow()
+
+    private val completedDownloadsMap = java.util.concurrent.ConcurrentHashMap<String, String>()
+    private val failedDownloadsMap = java.util.concurrent.ConcurrentHashMap<String, String>()
+
+    fun getPersistedVideoId(downloadId: String): String? = completedDownloadsMap[downloadId]
+    fun getFailedReason(downloadId: String): String? = failedDownloadsMap[downloadId]
 
     private var progressPollingJob: Job? = null
 
@@ -171,8 +176,8 @@ class SZDownloadManager private constructor(
                         percentage = percentage,
                         bytesDownloaded = download.bytesDownloaded,
                         totalBytes = download.contentLength,
-                        isCompleted = download.state == Download.STATE_COMPLETED,
-                        isFailed = download.state == Download.STATE_FAILED,
+                        isCompleted = download.state == Download.STATE_COMPLETED || completedDownloadsMap.containsKey(download.request.id),
+                        isFailed = download.state == Download.STATE_FAILED || failedDownloadsMap.containsKey(download.request.id),
                         isPaused = download.state == Download.STATE_STOPPED,
                         isDownloading = download.state == Download.STATE_DOWNLOADING || download.state == Download.STATE_QUEUED
                     )
@@ -203,8 +208,6 @@ class SZDownloadManager private constructor(
             val mimeType = download.request.mimeType ?: "video/mp4"
 
             saveUrlToMediaStore(download.request.uri.toString(), fileName, mimeType, download.request.id, title)
-            
-            cancelDownload(download.request.id)
         }
     }
 
@@ -216,43 +219,69 @@ class SZDownloadManager private constructor(
         title: String
     ) {
         try {
-            val request = Request.Builder().url(url).build()
-            okHttpClient.newCall(request).execute().use { response ->
-                if (!response.isSuccessful) return
-                
-                val body = response.body ?: return
-                val detectedMimeType = body.contentType()?.let { "${it.type}/${it.subtype}" } ?: mimeType
-                
-                val tempFile = File(context.cacheDir, "temp_download_${System.currentTimeMillis()}.mp4")
+            val dataSource = cacheDataSourceFactory.createDataSource()
+            val dataSpec = androidx.media3.datasource.DataSpec(Uri.parse(url))
+            val tempFile = File(context.cacheDir, "temp_download_${System.currentTimeMillis()}.mp4")
+            
+            var success = false
+            try {
+                dataSource.open(dataSpec)
                 tempFile.outputStream().use { output ->
-                    body.byteStream().copyTo(output)
+                    val buffer = ByteArray(8192)
+                    var bytesRead = dataSource.read(buffer, 0, buffer.size)
+                    while (bytesRead != -1) {
+                        output.write(buffer, 0, bytesRead)
+                        bytesRead = dataSource.read(buffer, 0, buffer.size)
+                    }
                 }
-
-                val result = videoStorageRepository.saveVideoToMediaStore(
-                    sourceUri = Uri.fromFile(tempFile),
-                    fileName = fileName,
-                    mimeType = detectedMimeType,
-                    relativePath = "Movies/SZ Player/"
-                )
-
-                result.onSuccess { uri ->
-                    val video = Video(
-                        id = uri.toString(),
-                        title = title,
-                        url = uri.toString(),
-                        type = VideoType.DOWNLOADED,
-                        localUri = uri.toString(),
-                        size = tempFile.length(),
-                        dateAdded = System.currentTimeMillis()
-                    )
-                    videoRepository.addVideo(video)
-                    tempFile.delete()
-                }.onFailure {
-                    tempFile.delete()
-                }
+                success = tempFile.length() > 0
+            } catch (e: Exception) {
+                e.printStackTrace()
+            } finally {
+                try { dataSource.close() } catch (_: Exception) {}
             }
+
+            if (!success) {
+                tempFile.delete()
+                failedDownloadsMap[originalId] = "Failed to copy downloaded video stream"
+                cancelDownload(originalId)
+                updateDownloadList()
+                return
+            }
+
+            val result = videoStorageRepository.saveVideoToMediaStore(
+                sourceUri = Uri.fromFile(tempFile),
+                fileName = fileName,
+                mimeType = mimeType,
+                relativePath = "Movies/SZ Player/"
+            )
+
+            result.onSuccess { uri ->
+                val video = Video(
+                    id = uri.toString(),
+                    title = title,
+                    url = uri.toString(),
+                    type = VideoType.DOWNLOADED,
+                    localUri = uri.toString(),
+                    size = tempFile.length(),
+                    dateAdded = System.currentTimeMillis()
+                )
+                videoRepository.addVideo(video)
+                completedDownloadsMap[originalId] = uri.toString()
+                cancelDownload(originalId)
+                updateDownloadList()
+            }.onFailure { error ->
+                error.printStackTrace()
+                failedDownloadsMap[originalId] = error.message ?: "Failed to save video to storage"
+                cancelDownload(originalId)
+                updateDownloadList()
+            }
+            tempFile.delete()
         } catch (e: Exception) {
             e.printStackTrace()
+            failedDownloadsMap[originalId] = e.message ?: "Error saving downloaded video"
+            cancelDownload(originalId)
+            updateDownloadList()
         }
     }
 

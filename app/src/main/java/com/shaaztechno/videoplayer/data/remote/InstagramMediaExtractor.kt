@@ -33,7 +33,7 @@ class InstagramMediaExtractor(private val okHttpClient: OkHttpClient) {
                 
                 if (finalUrl.contains("accounts/login")) {
                     Log.w("InstagramExtractor", "Redirected to login page: $finalUrl")
-                    return@use Result.failure(Exception("This Reel is unavailable or is not publicly accessible. Instagram may require a login."))
+                    return@use Result.failure(Exception("Unable to retrieve this Reel. The Reel may be private, login-protected, unavailable, or temporarily blocked by Instagram."))
                 }
 
                 if (!response.isSuccessful) {
@@ -42,29 +42,31 @@ class InstagramMediaExtractor(private val okHttpClient: OkHttpClient) {
                 }
 
                 val html = response.body?.string() ?: return@use Result.failure(Exception("Empty response from Instagram."))
-                Log.d("InstagramExtractor", "HTML received, length: ${html.length}")
+                
+                // Bot protection check
+                if (html.contains("Please wait a few minutes before you try again") || html.contains("Checking if the site connection is secure")) {
+                    return@use Result.failure(Exception("Instagram is temporarily limiting access. Please try again later."))
+                }
 
                 val videoUrl = extractVideoUrl(html)
                 val thumbnailUrl = extractThumbnailUrl(html)
                 val caption = extractCaption(html)
                 val username = extractUsername(html)
 
-                Log.d("InstagramExtractor", "Extraction results - Video: ${videoUrl != null}, Thumbnail: ${thumbnailUrl != null}")
-
-                if (videoUrl != null) {
+                if (videoUrl != null && videoUrl.startsWith("http")) {
                     Result.success(
                         InstagramReel(
                             videoUrl = cleanUrl(videoUrl),
-                            thumbnailUrl = thumbnailUrl?.let { cleanUrl(it) } ?: "",
+                            thumbnailUrl = thumbnailUrl?.let { if (it.startsWith("http")) cleanUrl(it) else "" } ?: "",
                             caption = caption?.let { decodeHtmlEntities(it) },
                             username = username
                         )
                     )
                 } else {
-                    if (html.contains("Login") && html.contains("Password")) {
-                        Result.failure(Exception("This Reel is unavailable or is not publicly accessible. Instagram may require a login."))
+                    if (html.contains("Login") && html.contains("Password") || html.contains("login_page")) {
+                        Result.failure(Exception("Unable to retrieve this Reel. The Reel may be private, login-protected, unavailable, or temporarily blocked by Instagram."))
                     } else {
-                        Result.failure(Exception("Unable to retrieve media information from this Reel. Instagram may have changed its public page format."))
+                        Result.failure(Exception("Unable to retrieve media information. Public Reel format may have changed."))
                     }
                 }
             }
@@ -80,20 +82,38 @@ class InstagramMediaExtractor(private val okHttpClient: OkHttpClient) {
         if (!normalized.startsWith("http")) {
             normalized = "https://$normalized"
         }
-        if (normalized.contains("instagr.am")) {
-            normalized = normalized.replace("instagr.am", "instagram.com")
-        }
-        if (normalized.contains("://instagram.com")) {
-            normalized = normalized.replace("://instagram.com", "://www.instagram.com")
+        val reelIdMatch = Pattern.compile("/(reels?|p)/([a-zA-Z0-9_-]+)").matcher(normalized)
+        if (reelIdMatch.find()) {
+            val type = reelIdMatch.group(1)
+            val id = reelIdMatch.group(2)
+            return "https://www.instagram.com/$type/$id/"
         }
         return normalized
     }
 
     private fun cleanUrl(url: String): String {
-        return url
+        val cleaned = url
             .replace("\\u0026", "&")
+            .replace("\\u003d", "=")
+            .replace("\\u0025", "%")
             .replace("\\/", "/")
             .replace("&amp;", "&")
+
+        return try {
+            val pattern = Pattern.compile("\\\\u([0-9a-fA-F]{4})")
+            val matcher = pattern.matcher(cleaned)
+            val sb = StringBuffer()
+            while (matcher.find()) {
+                val hex = matcher.group(1) ?: continue
+                val codePoint = hex.toInt(16)
+                val str = String(Character.toChars(codePoint))
+                matcher.appendReplacement(sb, java.util.regex.Matcher.quoteReplacement(str))
+            }
+            matcher.appendTail(sb)
+            sb.toString()
+        } catch (e: Exception) {
+            cleaned
+        }
     }
 
     private fun decodeHtmlEntities(text: String): String {
@@ -115,9 +135,8 @@ class InstagramMediaExtractor(private val okHttpClient: OkHttpClient) {
             "\"contentUrl\":\"(.*?)\"",
             "\"xdt_api__v1__media__direct_path\":\"(.*?)\"",
             "\"video_versions\":\\[\\{[^}]*\"url\":\"(.*?)\"",
-            "\"video_versions\":\\[.*\"url\":\"(.*?)\"",
             "\"video_url\":\\s*\"(.*?)\"",
-            "\"playable_url\":\"(.*?)\"",
+            "playable_url\":\"(.*?)\"",
             "\"shortcode_media\":\\{.*?\"video_url\":\"(.*?)\"",
             "\"base_url\":\"(.*?)\""
         )

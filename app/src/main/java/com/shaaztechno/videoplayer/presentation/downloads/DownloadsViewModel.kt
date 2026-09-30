@@ -28,7 +28,6 @@ class DownloadsViewModel(
                 repository.getVideosByType(VideoType.DOWNLOADED),
                 downloadManager.downloads
             ) { dbVideos, activeDownloads ->
-                val completedIds = activeDownloads.filter { it.isCompleted }.map { it.id }.toSet()
                 val activeOrFailed = activeDownloads.filter { !it.isCompleted }
 
                 // Deduplicate videos: show active/failed items in activeDownloads, completed in dbVideos

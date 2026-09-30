@@ -48,7 +48,8 @@ fun ContinueWatchingScreen(
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background
-                )
+                ),
+                windowInsets = WindowInsets.statusBars
             )
         },
         contentWindowInsets = WindowInsets(0, 0, 0, 0)

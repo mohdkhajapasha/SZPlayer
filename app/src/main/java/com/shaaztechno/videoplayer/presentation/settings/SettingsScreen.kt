@@ -16,6 +16,7 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.shaaztechno.videoplayer.ui.theme.ElectricGreen
+import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -23,6 +24,39 @@ fun SettingsScreen(
     viewModel: SettingsViewModel
 ) {
     val settings by viewModel.settings.collectAsState()
+    var showDeleteDialog by remember { mutableStateOf(false) }
+    val snackbarHostState = remember { SnackbarHostState() }
+    val scope = rememberCoroutineScope()
+
+    if (showDeleteDialog) {
+        AlertDialog(
+            onDismissRequest = { showDeleteDialog = false },
+            title = { Text("Clear History") },
+            text = { Text("Are you sure you want to clear all playback history? This action cannot be undone.") },
+            confirmButton = {
+                TextButton(
+                    onClick = {
+                        viewModel.clearHistory()
+                        showDeleteDialog = false
+                        scope.launch {
+                            snackbarHostState.showSnackbar("Playback history cleared")
+                        }
+                    },
+                    colors = ButtonDefaults.textButtonColors(contentColor = Color.Red)
+                ) {
+                    Text("Clear")
+                }
+            },
+            dismissButton = {
+                TextButton(onClick = { showDeleteDialog = false }) {
+                    Text("Cancel")
+                }
+            },
+            containerColor = MaterialTheme.colorScheme.surface,
+            titleContentColor = MaterialTheme.colorScheme.onSurface,
+            textContentColor = MaterialTheme.colorScheme.onSurfaceVariant
+        )
+    }
 
     Scaffold(
         topBar = {
@@ -39,9 +73,11 @@ fun SettingsScreen(
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background
-                )
+                ),
+                windowInsets = WindowInsets.statusBars
             )
         },
+        snackbarHost = { SnackbarHost(snackbarHostState) },
         contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { padding ->
         settings?.let { userSettings ->
@@ -196,7 +232,7 @@ fun SettingsScreen(
                 Text("Data & History", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = ElectricGreen))
                 
                 OutlinedButton(
-                    onClick = { viewModel.clearHistory() },
+                    onClick = { showDeleteDialog = true },
                     modifier = Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Red),
                     border = ButtonDefaults.outlinedButtonColors(contentColor = Color.Red).run { androidx.compose.foundation.BorderStroke(1.dp, Color.Red) }

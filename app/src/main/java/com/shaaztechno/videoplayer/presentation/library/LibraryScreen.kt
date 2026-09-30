@@ -29,7 +29,8 @@ import com.shaaztechno.videoplayer.ui.theme.ElectricGreen
 fun LibraryScreen(
     viewModel: LibraryViewModel,
     onVideoClick: (Video) -> Unit,
-    onShareClick: (Video) -> Unit
+    onShareClick: (Video) -> Unit,
+    onFolderClick: ((String) -> Unit)? = null
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
@@ -119,7 +120,8 @@ fun LibraryScreen(
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background
-                )
+                ),
+                windowInsets = WindowInsets.statusBars
             )
         },
         contentWindowInsets = WindowInsets(0, 0, 0, 0)
@@ -157,10 +159,10 @@ fun LibraryScreen(
                 LazyColumn(modifier = Modifier.fillMaxSize()) {
                     if (uiState.isFolderView) {
                         uiState.folders.forEach { (folderName, videos) ->
-                            item {
-                                FolderHeader(folderName, videos.size)
+                            item(key = "folder_$folderName") {
+                                FolderHeader(folderName, videos.size, onClick = onFolderClick?.let { cb -> { cb(folderName) } })
                             }
-                            items(videos) { video ->
+                            items(videos, key = { it.id }) { video ->
                                 var menuExpanded by remember { mutableStateOf(false) }
                                 VideoListItem(
                                     video = video,
@@ -249,7 +251,7 @@ fun LibraryScreen(
                             }
                         }
                     } else {
-                        items(uiState.videos) { video ->
+                        items(uiState.videos, key = { it.id }) { video ->
                             var menuExpanded by remember { mutableStateOf(false) }
                             VideoListItem(
                                 video = video,
@@ -481,11 +483,12 @@ fun LibraryScreen(
 }
 
 @Composable
-fun FolderHeader(name: String, count: Int) {
+fun FolderHeader(name: String, count: Int, onClick: (() -> Unit)? = null) {
     Row(
         modifier = Modifier
             .fillMaxWidth()
             .background(MaterialTheme.colorScheme.surface)
+            .then(if (onClick != null) Modifier.clickable(onClick = onClick) else Modifier)
             .padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -504,6 +507,15 @@ fun FolderHeader(name: String, count: Int) {
                 text = count.toString(),
                 modifier = Modifier.padding(horizontal = 6.dp, vertical = 2.dp),
                 style = MaterialTheme.typography.labelSmall.copy(color = MaterialTheme.colorScheme.onBackground)
+            )
+        }
+        if (onClick != null) {
+            Spacer(Modifier.width(8.dp))
+            Icon(
+                Icons.Default.ChevronRight,
+                contentDescription = "Open folder",
+                tint = MaterialTheme.colorScheme.onSurface.copy(alpha = 0.4f),
+                modifier = Modifier.size(18.dp)
             )
         }
     }

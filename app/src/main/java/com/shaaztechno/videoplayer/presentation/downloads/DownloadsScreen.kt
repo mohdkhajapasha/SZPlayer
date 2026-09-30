@@ -5,16 +5,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.lazy.itemsIndexed
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
-import androidx.compose.runtime.Composable
-import androidx.compose.runtime.collectAsState
-import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableStateOf
-import androidx.compose.runtime.remember
-import androidx.compose.runtime.setValue
+import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
@@ -24,6 +20,7 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.shaaztechno.videoplayer.data.downloader.DownloadProgressItem
 import com.shaaztechno.videoplayer.domain.model.Video
+import com.shaaztechno.videoplayer.presentation.components.BannerAd
 import com.shaaztechno.videoplayer.presentation.home.VideoListItem
 import com.shaaztechno.videoplayer.ui.theme.BorderSubtle
 import com.shaaztechno.videoplayer.ui.theme.ElectricGreen
@@ -37,6 +34,7 @@ fun DownloadsScreen(
     onShareClick: (Video) -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    var videoToDelete by remember { mutableStateOf<Video?>(null) }
 
     Scaffold(
         topBar = {
@@ -53,145 +51,190 @@ fun DownloadsScreen(
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background
-                )
+                ),
+                windowInsets = WindowInsets.statusBars
             )
         },
         contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { padding ->
-        Box(
+        Column(
             modifier = Modifier
                 .fillMaxSize()
                 .padding(padding)
                 .background(MaterialTheme.colorScheme.background)
         ) {
-            if (uiState.isLoading) {
-                Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-                    CircularProgressIndicator(color = ElectricGreen)
-                }
-            } else if (uiState.isEmpty) {
-                Box(
-                    modifier = Modifier
-                        .fillMaxSize()
-                        .padding(32.dp),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Column(
-                        horizontalAlignment = Alignment.CenterHorizontally,
-                        verticalArrangement = Arrangement.spacedBy(12.dp)
-                    ) {
-                        Icon(
-                            imageVector = Icons.Default.DownloadDone,
-                            contentDescription = null,
-                            tint = MutedGray,
-                            modifier = Modifier.size(56.dp)
-                        )
-                        Text(
-                            text = "No Downloads",
-                            style = MaterialTheme.typography.titleMedium.copy(
-                                fontWeight = FontWeight.Bold,
-                                color = MaterialTheme.colorScheme.onBackground
-                            )
-                        )
-                        Text(
-                            text = "Videos you download from URLs will appear here for offline playback.",
-                            style = MaterialTheme.typography.bodySmall.copy(
-                                color = MutedGray,
-                                lineHeight = 18.sp
-                            ),
-                            textAlign = androidx.compose.ui.text.style.TextAlign.Center
-                        )
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .weight(1f)
+            ) {
+                if (uiState.isLoading) {
+                    Box(modifier = Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+                        CircularProgressIndicator(color = ElectricGreen)
                     }
-                }
-            } else {
-                LazyColumn(
-                    modifier = Modifier.fillMaxSize(),
-                    contentPadding = PaddingValues(16.dp),
-                    verticalArrangement = Arrangement.spacedBy(16.dp)
-                ) {
-                    // Active & Failed Downloads
-                    if (uiState.activeDownloads.isNotEmpty()) {
-                        item {
+                } else if (uiState.isEmpty) {
+                    Box(
+                        modifier = Modifier
+                            .fillMaxSize()
+                            .padding(32.dp),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Column(
+                            horizontalAlignment = Alignment.CenterHorizontally,
+                            verticalArrangement = Arrangement.spacedBy(12.dp)
+                        ) {
+                            Icon(
+                                imageVector = Icons.Default.DownloadDone,
+                                contentDescription = null,
+                                tint = MutedGray,
+                                modifier = Modifier.size(56.dp)
+                            )
                             Text(
-                                text = "ACTIVE DOWNLOADS",
-                                style = MaterialTheme.typography.labelMedium.copy(
-                                    fontWeight = FontWeight.ExtraBold,
-                                    letterSpacing = 1.sp,
-                                    color = ElectricGreen
+                                text = "No Downloads",
+                                style = MaterialTheme.typography.titleMedium.copy(
+                                    fontWeight = FontWeight.Bold,
+                                    color = MaterialTheme.colorScheme.onBackground
                                 )
                             )
-                        }
-
-                        items(uiState.activeDownloads, key = { it.id }) { item ->
-                            ActiveDownloadCard(
-                                item = item,
-                                onPause = { viewModel.pauseDownload(item.id) },
-                                onResume = { viewModel.resumeDownload(item.id) },
-                                onCancel = { viewModel.cancelDownload(item.id) }
+                            Text(
+                                text = "Videos you download from URLs will appear here for offline playback.",
+                                style = MaterialTheme.typography.bodySmall.copy(
+                                    color = MutedGray,
+                                    lineHeight = 18.sp
+                                ),
+                                textAlign = androidx.compose.ui.text.style.TextAlign.Center
                             )
                         }
                     }
+                } else {
+                    LazyColumn(
+                        modifier = Modifier.fillMaxSize(),
+                        contentPadding = PaddingValues(16.dp),
+                        verticalArrangement = Arrangement.spacedBy(16.dp)
+                    ) {
+                        // Active & Failed Downloads
+                        if (uiState.activeDownloads.isNotEmpty()) {
+                            item {
+                                Text(
+                                    text = "ACTIVE DOWNLOADS",
+                                    style = MaterialTheme.typography.labelMedium.copy(
+                                        fontWeight = FontWeight.ExtraBold,
+                                        letterSpacing = 1.sp,
+                                        color = ElectricGreen
+                                    )
+                                )
+                            }
 
-                    // Completed Downloads
-                    if (uiState.completedVideos.isNotEmpty()) {
-                        item {
-                            Text(
-                                text = "DOWNLOADED VIDEOS",
-                                style = MaterialTheme.typography.labelMedium.copy(
-                                    fontWeight = FontWeight.ExtraBold,
-                                    letterSpacing = 1.sp,
-                                    color = MaterialTheme.colorScheme.onBackground
-                                ),
-                                modifier = Modifier.padding(top = 8.dp)
-                            )
+                            items(uiState.activeDownloads, key = { it.id }) { item ->
+                                ActiveDownloadCard(
+                                    item = item,
+                                    onPause = { viewModel.pauseDownload(item.id) },
+                                    onResume = { viewModel.resumeDownload(item.id) },
+                                    onCancel = { viewModel.cancelDownload(item.id) }
+                                )
+                            }
                         }
 
-                        items(uiState.completedVideos, key = { it.id }) { video ->
-                            var menuExpanded by remember { mutableStateOf(false) }
-                            VideoListItem(
-                                video = video,
-                                onClick = { onVideoClick(video) },
-                                onShare = { menuExpanded = true },
-                                dropdownContent = {
-                                    DropdownMenu(
-                                        expanded = menuExpanded,
-                                        onDismissRequest = { menuExpanded = false },
-                                        modifier = Modifier.background(MaterialTheme.colorScheme.surface)
-                                    ) {
-                                        DropdownMenuItem(
-                                            text = { Text("Share", color = MaterialTheme.colorScheme.onSurface) },
-                                            leadingIcon = {
-                                                Icon(
-                                                    Icons.Default.Share,
-                                                    contentDescription = null,
-                                                    tint = MaterialTheme.colorScheme.onSurface
+                        // Completed Downloads
+                        if (uiState.completedVideos.isNotEmpty()) {
+                            item {
+                                Text(
+                                    text = "DOWNLOADED VIDEOS",
+                                    style = MaterialTheme.typography.labelMedium.copy(
+                                        fontWeight = FontWeight.ExtraBold,
+                                        letterSpacing = 1.sp,
+                                        color = MaterialTheme.colorScheme.onBackground
+                                    ),
+                                    modifier = Modifier.padding(top = 8.dp)
+                                )
+                            }
+
+                            itemsIndexed(uiState.completedVideos, key = { _, video -> video.id }) { index, video ->
+                                var menuExpanded by remember { mutableStateOf(false) }
+                                Column {
+                                    VideoListItem(
+                                        video = video,
+                                        onClick = { onVideoClick(video) },
+                                        onShare = { menuExpanded = true },
+                                        dropdownContent = {
+                                            DropdownMenu(
+                                                expanded = menuExpanded,
+                                                onDismissRequest = { menuExpanded = false },
+                                                modifier = Modifier.background(MaterialTheme.colorScheme.surface)
+                                            ) {
+                                                DropdownMenuItem(
+                                                    text = { Text("Share", color = MaterialTheme.colorScheme.onSurface) },
+                                                    leadingIcon = {
+                                                        Icon(
+                                                            Icons.Default.Share,
+                                                            contentDescription = null,
+                                                            tint = MaterialTheme.colorScheme.onSurface
+                                                        )
+                                                    },
+                                                    onClick = {
+                                                        menuExpanded = false
+                                                        onShareClick(video)
+                                                    }
                                                 )
-                                            },
-                                            onClick = {
-                                                menuExpanded = false
-                                                onShareClick(video)
-                                            }
-                                        )
-                                        DropdownMenuItem(
-                                            text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
-                                            leadingIcon = {
-                                                Icon(
-                                                    Icons.Default.Delete,
-                                                    contentDescription = null,
-                                                    tint = MaterialTheme.colorScheme.error
+                                                DropdownMenuItem(
+                                                    text = { Text("Delete", color = MaterialTheme.colorScheme.error) },
+                                                    leadingIcon = {
+                                                        Icon(
+                                                            Icons.Default.Delete,
+                                                            contentDescription = null,
+                                                            tint = MaterialTheme.colorScheme.error
+                                                        )
+                                                    },
+                                                    onClick = {
+                                                        menuExpanded = false
+                                                        videoToDelete = video
+                                                    }
                                                 )
-                                            },
-                                            onClick = {
-                                                menuExpanded = false
-                                                viewModel.deleteDownload(video)
                                             }
-                                        )
+                                        }
+                                    )
+                                    
+                                    // Ad placement logic:
+                                    // after 3rd video (index == 2)
+                                    // if not 3< (i.e. size < 3), then after last video (index == lastIndex)
+                                    if (index == 2 || (uiState.completedVideos.size < 3 && index == uiState.completedVideos.lastIndex)) {
+                                        Spacer(modifier = Modifier.height(8.dp))
+                                        BannerAd()
                                     }
                                 }
-                            )
+                            }
                         }
                     }
                 }
             }
+            
+            // if 0 (i.e. completedVideos is empty), then show ad at the bottom
+            if (uiState.completedVideos.isEmpty()) {
+                BannerAd(modifier = Modifier.padding(bottom = 16.dp))
+            }
+        }
+
+        videoToDelete?.let { video ->
+            AlertDialog(
+                onDismissRequest = { videoToDelete = null },
+                title = { Text("Delete video?") },
+                text = { Text("Are you sure you want to delete this video?") },
+                confirmButton = {
+                    TextButton(
+                        onClick = {
+                            viewModel.deleteDownload(video)
+                            videoToDelete = null
+                        }
+                    ) {
+                        Text("Delete", color = Color.Red)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { videoToDelete = null }) {
+                        Text("Cancel")
+                    }
+                }
+            )
         }
     }
 }

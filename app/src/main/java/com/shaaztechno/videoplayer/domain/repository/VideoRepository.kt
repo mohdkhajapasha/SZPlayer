@@ -12,7 +12,7 @@ interface VideoRepository {
     suspend fun refreshOnlineCatalog()
     suspend fun refreshLocalVideos()
     suspend fun addVideo(video: Video)
-    suspend fun deleteVideo(id: String)
+    suspend fun deleteVideo(id: String): Result<Unit>
     
     // History
     fun getPlaybackHistory(): Flow<List<HistoryEntity>>

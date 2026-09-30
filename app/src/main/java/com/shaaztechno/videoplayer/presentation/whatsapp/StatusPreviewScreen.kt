@@ -3,6 +3,7 @@ package com.shaaztechno.videoplayer.presentation.whatsapp
 import android.net.Uri
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.ArrowBack
 import androidx.compose.material.icons.filled.Download
@@ -55,7 +56,8 @@ fun StatusPreviewScreen(
                 colors = TopAppBarDefaults.topAppBarColors(containerColor = Color.Black.copy(alpha = 0.6f))
             )
         },
-        containerColor = Color.Black
+        containerColor = Color.Black,
+        contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { paddingValues ->
         Box(
             modifier = Modifier
@@ -65,8 +67,28 @@ fun StatusPreviewScreen(
         ) {
             if (isVideo) {
                 val exoPlayer = remember {
-                    ExoPlayer.Builder(context).build().apply {
+                    val renderersFactory = androidx.media3.exoplayer.DefaultRenderersFactory(context).setEnableDecoderFallback(true)
+                    ExoPlayer.Builder(context, renderersFactory).build().apply {
                         setMediaItem(MediaItem.fromUri(uri))
+                        addListener(object : androidx.media3.common.Player.Listener {
+                            override fun onPlayerError(error: androidx.media3.common.PlaybackException) {
+                                val msg = error.message ?: ""
+                                val causeMsg = error.cause?.message ?: ""
+                                if (msg.contains("audio", ignoreCase = true) ||
+                                    causeMsg.contains("audio", ignoreCase = true) ||
+                                    msg.contains("eac3", ignoreCase = true) ||
+                                    causeMsg.contains("eac3", ignoreCase = true) ||
+                                    error.errorCode == androidx.media3.common.PlaybackException.ERROR_CODE_DECODER_INIT_FAILED
+                                ) {
+                                    trackSelectionParameters = trackSelectionParameters
+                                        .buildUpon()
+                                        .setTrackTypeDisabled(androidx.media3.common.C.TRACK_TYPE_AUDIO, true)
+                                        .build()
+                                    prepare()
+                                    play()
+                                }
+                            }
+                        })
                         prepare()
                         playWhenReady = true
                     }

@@ -4,6 +4,7 @@ import android.app.Application
 import coil.ImageLoader
 import coil.ImageLoaderFactory
 import coil.decode.VideoFrameDecoder
+import com.google.android.gms.ads.MobileAds
 import com.shaaztechno.videoplayer.data.local.SZPlayerDatabase
 import com.shaaztechno.videoplayer.data.local.SettingsDataStore
 import com.shaaztechno.videoplayer.data.remote.GoogleSheetParser
@@ -11,7 +12,6 @@ import com.shaaztechno.videoplayer.data.repository.VideoRepositoryImpl
 import com.shaaztechno.videoplayer.data.downloader.VideoDownloader
 import com.shaaztechno.videoplayer.data.remote.InstagramMediaExtractor
 import com.shaaztechno.videoplayer.data.repository.InstagramRepositoryImpl
-import com.shaaztechno.videoplayer.data.repository.WhatsAppStatusRepositoryImpl
 import com.shaaztechno.videoplayer.data.repository.VideoStorageRepositoryImpl
 import com.shaaztechno.videoplayer.domain.usecase.GetInstagramReelUseCase
 import com.shaaztechno.videoplayer.domain.repository.VideoStorageRepository
@@ -67,11 +67,12 @@ class SZPlayerApplication : Application(), ImageLoaderFactory {
     val instagramRepository by lazy { InstagramRepositoryImpl(instagramMediaExtractor) }
     val getInstagramReelUseCase by lazy { GetInstagramReelUseCase(instagramRepository) }
 
-    // WhatsApp Status Feature DI
-    val whatsappStatusRepository by lazy { WhatsAppStatusRepositoryImpl(this, videoStorageRepository, videoRepository) }
-
     override fun onCreate() {
         super.onCreate()
+        // Initialize AdMob
+        try {
+            MobileAds.initialize(this) {}
+        } catch (_: Exception) {}
     }
 
     override fun newImageLoader(): ImageLoader {

@@ -3,6 +3,7 @@ package com.shaaztechno.videoplayer.presentation.library
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.layout.WindowInsets
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material.icons.Icons
@@ -54,9 +55,11 @@ fun FolderVideosScreen(
                 },
                 colors = TopAppBarDefaults.topAppBarColors(
                     containerColor = MaterialTheme.colorScheme.background
-                )
+                ),
+                windowInsets = WindowInsets.statusBars
             )
-        }
+        },
+        contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { padding ->
         Box(
             modifier = Modifier
@@ -82,7 +85,7 @@ fun FolderVideosScreen(
                 }
             } else {
                 LazyColumn(modifier = Modifier.fillMaxSize()) {
-                    items(uiState.videos) { video ->
+                    items(uiState.videos, key = { it.id }) { video ->
                         val progress = uiState.historyMap[video.id] ?: 0f
                         var menuExpanded by remember { mutableStateOf(false) }
                         

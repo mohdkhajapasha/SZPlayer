@@ -15,7 +15,6 @@ import androidx.compose.material.icons.filled.Folder
 import androidx.compose.material.icons.filled.Link
 import androidx.compose.material.icons.filled.Movie
 import androidx.compose.material.icons.filled.VideoLibrary
-import androidx.compose.material.icons.filled.Whatsapp
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -26,6 +25,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.shaaztechno.videoplayer.presentation.components.BannerAd
 import com.shaaztechno.videoplayer.ui.theme.BorderSubtle
 import com.shaaztechno.videoplayer.ui.theme.ElectricGreen
 import com.shaaztechno.videoplayer.ui.theme.MutedGray
@@ -38,8 +38,7 @@ fun AddVideoScreen(
     onBack: () -> Unit,
     onBrowseDeviceVideos: () -> Unit,
     onNavigateToUrlScreen: () -> Unit,
-    onNavigateToInstagram: () -> Unit,
-    onNavigateToWhatsAppStatus: () -> Unit
+    onNavigateToInstagram: () -> Unit
 ) {
     val uiState by viewModel.uiState.collectAsState()
 
@@ -81,6 +80,9 @@ fun AddVideoScreen(
                 windowInsets = TopAppBarDefaults.windowInsets
             )
         },
+        bottomBar = {
+            BannerAd(modifier = Modifier.navigationBarsPadding())
+        },
         contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { paddingValues ->
         Column(
@@ -100,14 +102,6 @@ fun AddVideoScreen(
                 modifier = Modifier.padding(bottom = 8.dp)
             )
 
-            // Option 1: WhatsApp Status Card (New)
-//            AddVideoOptionCard(
-//                title = "WhatsApp Status",
-//                subtitle = "Save and share WhatsApp status updates",
-//                icon = Icons.Default.Whatsapp,
-//                onClick = onNavigateToWhatsAppStatus
-//            )
-
             // Option 2: Video URL Card
             AddVideoOptionCard(
                 title = "Video URL",
@@ -125,71 +119,71 @@ fun AddVideoScreen(
             )
 
             // Option 4: Local Video Card
-//            AddVideoOptionCard(
-//                title = "Local Video",
-//                subtitle = "Choose a video from your device",
-//                icon = Icons.Default.Folder,
-//                onClick = { launcher.launch(arrayOf("video/*")) }
-//            )
+            AddVideoOptionCard(
+                title = "Local Video",
+                subtitle = "Choose a video from your device",
+                icon = Icons.Default.Folder,
+                onClick = { launcher.launch(arrayOf("video/*")) }
+            )
 
             Spacer(modifier = Modifier.height(8.dp))
 
             // Option 5: Browse Device Library
-//            Card(
-//                modifier = Modifier
-//                    .fillMaxWidth()
-//                    .clickable(onClick = onBrowseDeviceVideos),
-//                shape = RoundedCornerShape(16.dp),
-//                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
-//                border = BorderStroke(1.dp, BorderSubtle)
-//            ) {
-//                Row(
-//                    modifier = Modifier
-//                        .fillMaxWidth()
-//                        .padding(16.dp),
-//                    verticalAlignment = Alignment.CenterVertically
-//                ) {
-//                    Box(
-//                        modifier = Modifier
-//                            .size(44.dp)
-//                            .clip(CircleShape)
-//                            .background(MaterialTheme.colorScheme.background),
-//                        contentAlignment = Alignment.Center
-//                    ) {
-//                        Icon(
-//                            imageVector = Icons.Default.VideoLibrary,
-//                            contentDescription = null,
-//                            tint = ElectricGreen,
-//                            modifier = Modifier.size(22.dp)
-//                        )
-//                    }
-//
-//                    Spacer(modifier = Modifier.width(16.dp))
-//
-//                    Column(modifier = Modifier.weight(1f)) {
-//                        Text(
-//                            text = "Browse Library",
-//                            style = MaterialTheme.typography.titleMedium.copy(
-//                                fontWeight = FontWeight.Bold,
-//                                color = MaterialTheme.colorScheme.onSurface
-//                            )
-//                        )
-//                        Text(
-//                            text = "View and manage all scanned videos on device",
-//                            style = MaterialTheme.typography.bodySmall.copy(
-//                                color = MutedGray
-//                            )
-//                        )
-//                    }
-//
-//                    Icon(
-//                        imageVector = Icons.Default.ChevronRight,
-//                        contentDescription = null,
-//                        tint = MutedGray,
-//                        modifier = Modifier.size(20.dp)
-//                    )
-//                }
-//            }
+            Card(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clickable(onClick = onBrowseDeviceVideos),
+                shape = RoundedCornerShape(16.dp),
+                colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface),
+                border = BorderStroke(1.dp, BorderSubtle)
+            ) {
+                Row(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(16.dp),
+                    verticalAlignment = Alignment.CenterVertically
+                ) {
+                    Box(
+                        modifier = Modifier
+                            .size(44.dp)
+                            .clip(CircleShape)
+                            .background(MaterialTheme.colorScheme.background),
+                        contentAlignment = Alignment.Center
+                    ) {
+                        Icon(
+                            imageVector = Icons.Default.VideoLibrary,
+                            contentDescription = null,
+                            tint = ElectricGreen,
+                            modifier = Modifier.size(22.dp)
+                        )
+                    }
+
+                    Spacer(modifier = Modifier.width(16.dp))
+
+                    Column(modifier = Modifier.weight(1f)) {
+                        Text(
+                            text = "Browse Library",
+                            style = MaterialTheme.typography.titleMedium.copy(
+                                fontWeight = FontWeight.Bold,
+                                color = MaterialTheme.colorScheme.onSurface
+                            )
+                        )
+                        Text(
+                            text = "View and manage all scanned videos on device",
+                            style = MaterialTheme.typography.bodySmall.copy(
+                                color = MutedGray
+                            )
+                        )
+                    }
+
+                    Icon(
+                        imageVector = Icons.Default.ChevronRight,
+                        contentDescription = null,
+                        tint = MutedGray,
+                        modifier = Modifier.size(20.dp)
+                    )
+                }
+            }
         }
     }
 }

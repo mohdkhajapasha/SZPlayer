@@ -63,15 +63,32 @@ class InstagramViewModel(
     private fun observeDownloadProgress(downloadId: String) {
         viewModelScope.launch {
             downloadManager.downloads.collectLatest { downloads ->
+                val finalVideoId = downloadManager.getPersistedVideoId(downloadId)
+                if (finalVideoId != null) {
+                    _uiState.value = InstagramUiState.DownloadComplete(finalVideoId)
+                    return@collectLatest
+                }
+
+                val failedReason = downloadManager.getFailedReason(downloadId)
+                if (failedReason != null) {
+                    _uiState.value = InstagramUiState.Error(failedReason)
+                    return@collectLatest
+                }
+
                 val download = downloads.find { it.id == downloadId }
                 if (download != null) {
                     if (download.isCompleted) {
-                        _uiState.value = InstagramUiState.DownloadComplete(downloadId)
-                    } else if (download.isFailed) {
-                        _uiState.value = InstagramUiState.Error("Download failed")
-                    } else {
                         _uiState.value = InstagramUiState.Downloading(
-                            progress = download.percentage / 100f,
+                            progress = 1.0f,
+                            downloaded = download.totalBytes.coerceAtLeast(download.bytesDownloaded),
+                            total = download.totalBytes
+                        )
+                    } else if (download.isFailed) {
+                        _uiState.value = InstagramUiState.Error("Download failed. The video link may have expired or blocked.")
+                    } else {
+                        val progress = if (download.percentage > 0) download.percentage / 100f else 0f
+                        _uiState.value = InstagramUiState.Downloading(
+                            progress = progress.coerceIn(0f, 1f),
                             downloaded = download.bytesDownloaded,
                             total = download.totalBytes
                         )

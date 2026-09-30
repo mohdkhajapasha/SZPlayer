@@ -36,6 +36,6 @@ interface VideoDao {
     @Query("DELETE FROM videos WHERE id IN (:ids)")
     suspend fun deleteVideosByIds(ids: List<String>)
 
-    @Query("DELETE FROM videos WHERE type = 'ONLINE'")
+    @Query("DELETE FROM videos WHERE type = 'ONLINE' AND folder = 'REMOTE_CATALOG'")
     suspend fun clearOnlineCatalog()
 }

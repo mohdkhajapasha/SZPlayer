@@ -21,6 +21,7 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.shaaztechno.videoplayer.domain.model.VideoMediaInfo
+import com.shaaztechno.videoplayer.presentation.components.BannerAd
 import com.shaaztechno.videoplayer.ui.theme.BorderSubtle
 import com.shaaztechno.videoplayer.ui.theme.ElectricGreen
 import com.shaaztechno.videoplayer.ui.theme.MutedGray
@@ -67,6 +68,9 @@ fun VideoUrlScreen(
                     containerColor = MaterialTheme.colorScheme.background
                 )
             )
+        },
+        bottomBar = {
+            BannerAd(modifier = Modifier.navigationBarsPadding())
         },
         contentWindowInsets = WindowInsets(0, 0, 0, 0)
     ) { padding ->

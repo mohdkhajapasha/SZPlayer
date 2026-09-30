@@ -37,7 +37,7 @@ class SettingsDataStore(private val context: Context) {
             defaultPlaybackSpeed = preferences[DEFAULT_PLAYBACK_SPEED] ?: 1.0f,
             keepScreenAwake = preferences[KEEP_SCREEN_AWAKE] ?: true,
             seekDuration = preferences[SEEK_DURATION] ?: 10000L,
-            darkMode = preferences[DARK_MODE] ?: "system",
+            darkMode = preferences[DARK_MODE] ?: "dark",
             defaultOrientation = preferences[DEFAULT_ORIENTATION] ?: "auto",
             brightnessGestureEnabled = preferences[BRIGHTNESS_GESTURE_ENABLED] ?: true,
             volumeGestureEnabled = preferences[VOLUME_GESTURE_ENABLED] ?: true,
@@ -92,15 +92,15 @@ class SettingsDataStore(private val context: Context) {
 }
 
 data class UserSettings(
-    val autoPlayNext: Boolean,
-    val resumePlayback: Boolean,
-    val defaultPlaybackSpeed: Float,
-    val keepScreenAwake: Boolean,
-    val seekDuration: Long,
-    val darkMode: String,
-    val defaultOrientation: String,
-    val brightnessGestureEnabled: Boolean,
-    val volumeGestureEnabled: Boolean,
-    val seekingGestureEnabled: Boolean,
-    val backgroundPlaybackEnabled: Boolean
+    val autoPlayNext: Boolean = true,
+    val resumePlayback: Boolean = true,
+    val defaultPlaybackSpeed: Float = 1.0f,
+    val keepScreenAwake: Boolean = true,
+    val seekDuration: Long = 10000L,
+    val darkMode: String = "dark",
+    val defaultOrientation: String = "auto",
+    val brightnessGestureEnabled: Boolean = true,
+    val volumeGestureEnabled: Boolean = true,
+    val seekingGestureEnabled: Boolean = true,
+    val backgroundPlaybackEnabled: Boolean = false
 )
