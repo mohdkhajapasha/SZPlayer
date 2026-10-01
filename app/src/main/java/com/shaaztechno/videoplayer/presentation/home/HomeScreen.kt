@@ -1,6 +1,7 @@
 package com.shaaztechno.videoplayer.presentation.home
 
 import android.Manifest
+import android.content.Context
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -13,12 +14,15 @@ import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.LazyRow
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import kotlinx.coroutines.delay
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -28,6 +32,7 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -58,6 +63,7 @@ fun HomeScreen(
     onFolderClick: (String) -> Unit = {}
 ) {
     val uiState by viewModel.uiState.collectAsState()
+    val context = LocalContext.current
 
     val permissionLauncher = rememberLauncherForActivityResult(
         ActivityResultContracts.RequestMultiplePermissions()
@@ -93,7 +99,7 @@ fun HomeScreen(
                     ) {
                         Image(
                             painter = painterResource(id = R.drawable.sz_player_icon),
-                            contentDescription = "SZ Player Logo",
+                            contentDescription = stringResource(R.string.sz_player_logo_desc),
                             modifier = Modifier
                                 .size(36.dp)
                                 .clip(RoundedCornerShape(8.dp))
@@ -101,7 +107,7 @@ fun HomeScreen(
                         Spacer(modifier = Modifier.width(10.dp))
                         Column {
                             Text(
-                                text = "SZ PLAYER",
+                                text = stringResource(R.string.sz_player_upper),
                                 style = MaterialTheme.typography.titleLarge.copy(
                                     fontWeight = FontWeight.Black,
                                     letterSpacing = 1.5.sp,
@@ -110,7 +116,7 @@ fun HomeScreen(
                                 )
                             )
                             Text(
-                                text = "PLAY  .  ANYTHING  .  ANYWHERE",
+                                text = stringResource(R.string.tagline),
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontWeight = FontWeight.SemiBold,
                                     letterSpacing = 1.2.sp,
@@ -125,7 +131,7 @@ fun HomeScreen(
                     IconButton(onClick = onSearchClick) {
                         Icon(
                             Icons.Default.Search,
-                            contentDescription = "Search",
+                            contentDescription = stringResource(R.string.search),
                             tint = MaterialTheme.colorScheme.onBackground,
                             modifier = Modifier.size(24.dp)
                         )
@@ -133,7 +139,7 @@ fun HomeScreen(
                     IconButton(onClick = onNavigateToSettings) {
                         Icon(
                             Icons.Default.Settings,
-                            contentDescription = "Settings",
+                            contentDescription = stringResource(R.string.settings),
                             tint = MaterialTheme.colorScheme.onBackground,
                             modifier = Modifier.size(24.dp)
                         )
@@ -155,7 +161,7 @@ fun HomeScreen(
             ) {
                 Icon(
                     Icons.Default.Add,
-                    contentDescription = "Add Video",
+                    contentDescription = stringResource(R.string.add_video_desc),
                     modifier = Modifier.size(28.dp)
                 )
             }
@@ -168,40 +174,48 @@ fun HomeScreen(
                 .padding(padding)
                 .background(MaterialTheme.colorScheme.background)
         ) {
-            // 1. Continue Watching Section
+            // 0. Hero Banner Carousel
             item {
-                SectionHeader(
-                    title = "Continue Watching",
-                    showViewAll = false,
-                    onViewAllClick = onNavigateToContinueWatching
+                BannerCarousel(
+                    videos = uiState.onlineVideos,
+                    onVideoClick = onVideoClick,
+                    modifier = Modifier.padding(top = 8.dp)
                 )
-                val activeHistory = uiState.recentlyPlayed.firstOrNull()
-                if (activeHistory != null) {
+            }
+
+            // 1. Continue Watching Section (only visible when videos exist to continue watching)
+            val activeHistory = uiState.recentlyPlayed.firstOrNull()
+            if (activeHistory != null) {
+                item {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    SectionHeader(
+                        title = stringResource(R.string.continue_watching),
+                        showViewAll = false,
+                        onViewAllClick = onNavigateToContinueWatching
+                    )
                     ContinueWatchingCard(
                         history = activeHistory,
                         onClick = { onVideoClick(activeHistory.toVideo()) }
                     )
-                } else {
-                    EmptyStateCard(text = "No videos to continue watching", onAction = onNavigateToLibrary, actionText = "Browse Videos")
                 }
             }
 
-            // 2. Recently Played Section
-            item {
-                Spacer(modifier = Modifier.height(16.dp))
-                SectionHeader(
-                    title = "Recently Played",
-                    showViewAll = uiState.recentlyPlayed.size > 1,
-                    onViewAllClick = onNavigateToContinueWatching
-                )
+            // 2. Recently Played Section (only visible when there are recently played items to display)
+            val historyList = if (uiState.recentlyPlayed.size > 1) {
+                uiState.recentlyPlayed.drop(1)
+            } else {
+                emptyList()
+            }
 
-                val historyList = if (uiState.recentlyPlayed.size > 1) {
-                    uiState.recentlyPlayed.drop(1)
-                } else {
-                    emptyList()
-                }
+            if (historyList.isNotEmpty()) {
+                item {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    SectionHeader(
+                        title = stringResource(R.string.recently_played),
+                        showViewAll = true,
+                        onViewAllClick = onNavigateToContinueWatching
+                    )
 
-                if (historyList.isNotEmpty()) {
                     LazyRow(
                         contentPadding = PaddingValues(horizontal = 16.dp),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
@@ -211,20 +225,13 @@ fun HomeScreen(
                             RecentVideoCard(
                                 title = history.title,
                                 durationText = formatDuration(history.duration),
-                                dateText = formatRelativeDate(history.timestamp),
+                                dateText = formatRelativeDate(context, history.timestamp),
                                 thumbnailUrl = history.thumbnailUrl ?: history.url,
                                 progress = progress,
                                 onClick = { onVideoClick(history.toVideo()) }
                             )
                         }
                     }
-                } else {
-                    Text(
-                        "No recently played videos",
-                        color = MutedGray,
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.padding(horizontal = 20.dp)
-                    )
                 }
             }
 
@@ -238,7 +245,7 @@ fun HomeScreen(
                 item {
                     Spacer(modifier = Modifier.height(16.dp))
                     SectionHeader(
-                        title = "My Playlists",
+                        title = stringResource(R.string.my_playlists),
                         showViewAll = true,
                         onViewAllClick = onNavigateToPlaylists
                     )
@@ -250,7 +257,7 @@ fun HomeScreen(
                         items(uiState.playlists, key = { it.id }) { playlist ->
                             PlaylistHeroCard(
                                 name = playlist.name,
-                                videoCount = "Playlist",
+                                videoCount = stringResource(R.string.playlist_label),
                                 icon = Icons.Default.PlaylistPlay,
                                 backdropUrl = "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=500",
                                 onClick = { onPlaylistClick(playlist.id, playlist.name) }
@@ -260,89 +267,58 @@ fun HomeScreen(
                 }
             }
 
-            // 4. Local Videos Section
-            item {
-                Spacer(modifier = Modifier.height(16.dp))
-                SectionHeader(
-                    title = "Local Videos",
-                    showViewAll = true,
-                    onViewAllClick = onNavigateToLibrary
-                )
+            // 4. Online Catalog Section (Horizontal Layout)
+            if (uiState.onlineVideos.isNotEmpty()) {
+                item {
+                    Spacer(modifier = Modifier.height(16.dp))
+                    SectionHeader(
+                        title = stringResource(R.string.online_catalog),
+                        showViewAll = false
+                    )
 
-                if (uiState.folders.isNotEmpty()) {
-                    val folderList = uiState.folders.entries.toList()
                     LazyRow(
                         contentPadding = PaddingValues(horizontal = 16.dp),
                         horizontalArrangement = Arrangement.spacedBy(12.dp)
                     ) {
-                        items(folderList, key = { it.key }) { (folderName, videos) ->
-                            LocalFolderCard(
-                                name = folderName,
-                                countText = "${videos.size} videos",
-                                onClick = { onFolderClick(folderName) }
+                        items(uiState.onlineVideos, key = { it.id }) { video ->
+                            val progress = uiState.historyMap[video.id] ?: 0f
+                            OnlineCatalogCard(
+                                video = video,
+                                progress = progress,
+                                onClick = { onVideoClick(video) }
                             )
                         }
                     }
-                } else {
-                    Text(
-                        "No local video folders",
-                        color = MutedGray,
-                        style = MaterialTheme.typography.bodySmall,
-                        modifier = Modifier.padding(horizontal = 20.dp)
-                    )
                 }
             }
 
-            // 6. Online Videos Section
-            if (uiState.onlineVideos.isNotEmpty()) {
-                item {
-                    Spacer(modifier = Modifier.height(16.dp))
-                    SectionHeader(title = "Online Catalog", showViewAll = false)
+            // 5. Local Videos Section (Vertical Folders Layout)
+            val folderList = uiState.folders.entries.toList()
+
+            item {
+                Spacer(modifier = Modifier.height(16.dp))
+                SectionHeader(
+                    title = stringResource(R.string.local_videos),
+                    showViewAll = folderList.size > 5,
+                    onViewAllClick = onNavigateToLibrary
+                )
+            }
+
+            if (folderList.isNotEmpty()) {
+                items(folderList, key = { it.key }) { (folderName, videos) ->
+                    FolderListItem(
+                        folderName = folderName,
+                        videos = videos,
+                        onClick = { onFolderClick(folderName) }
+                    )
                 }
-                items(uiState.onlineVideos, key = { it.id }) { video ->
-                    val progress = uiState.historyMap[video.id] ?: 0f
-                    var menuExpanded by remember { mutableStateOf(false) }
-                    VideoListItem(
-                        video = video,
-                        progress = progress,
-                        onClick = { onVideoClick(video) },
-                        onShare = { menuExpanded = true },
-                        dropdownContent = {
-                            DropdownMenu(
-                                expanded = menuExpanded,
-                                onDismissRequest = { menuExpanded = false },
-                                modifier = Modifier.background(MaterialTheme.colorScheme.surface)
-                            ) {
-                                DropdownMenuItem(
-                                    text = { Text("Play", color = MaterialTheme.colorScheme.onSurface) },
-                                    leadingIcon = {
-                                        Icon(
-                                            Icons.Default.PlayArrow,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.onSurface
-                                        )
-                                    },
-                                    onClick = {
-                                        menuExpanded = false
-                                        onVideoClick(video)
-                                    }
-                                )
-                                DropdownMenuItem(
-                                    text = { Text("Share", color = MaterialTheme.colorScheme.onSurface) },
-                                    leadingIcon = {
-                                        Icon(
-                                            Icons.Default.Share,
-                                            contentDescription = null,
-                                            tint = MaterialTheme.colorScheme.onSurface
-                                        )
-                                    },
-                                    onClick = {
-                                        menuExpanded = false
-                                        onShareClick(video)
-                                    }
-                                )
-                            }
-                        }
+            } else {
+                item {
+                    Text(
+                        stringResource(R.string.no_folders_found),
+                        color = MutedGray,
+                        style = MaterialTheme.typography.bodySmall,
+                        modifier = Modifier.padding(horizontal = 20.dp, vertical = 8.dp)
                     )
                 }
             }
@@ -358,6 +334,238 @@ fun HomeScreen(
             item {
                 Spacer(modifier = Modifier.height(90.dp))
             }
+        }
+    }
+}
+
+data class BannerItem(
+    val id: String,
+    val title: String,
+    val subtitle: String,
+    val imageUrl: String,
+    val tag: String,
+    val video: Video? = null
+)
+
+@Composable
+fun BannerCarousel(
+    videos: List<Video>,
+    onVideoClick: (Video) -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val featuredTag = stringResource(R.string.featured_tag)
+    val trendingTitle = stringResource(R.string.trending_title)
+    val trendingSubtitle = stringResource(R.string.trending_subtitle)
+    val trendingTag = stringResource(R.string.trending_tag)
+    val universalTitle = stringResource(R.string.universal_player_title)
+    val universalSubtitle = stringResource(R.string.universal_player_subtitle)
+    val szPlayerTag = stringResource(R.string.sz_player_upper)
+    val cinematicTitle = stringResource(R.string.cinematic_title)
+    val cinematicSubtitle = stringResource(R.string.cinematic_subtitle)
+    val ultraHdTag = stringResource(R.string.ultra_hd_tag)
+
+    val bannerItems = remember(videos, featuredTag, trendingTitle, trendingSubtitle, trendingTag, universalTitle, universalSubtitle, szPlayerTag, cinematicTitle, cinematicSubtitle, ultraHdTag) {
+
+        listOf(
+            BannerItem(
+                id = "b1",
+                title = trendingTitle,
+                subtitle = trendingSubtitle,
+                imageUrl = "https://images.unsplash.com/photo-1536440136628-849c177e76a1?w=800",
+                tag = trendingTag,
+                video = null
+            ),
+            BannerItem(
+                id = "b2",
+                title = universalTitle,
+                subtitle = universalSubtitle,
+                imageUrl = "https://images.unsplash.com/photo-1574375927938-d5a98e8ffe85?w=800",
+                tag = szPlayerTag,
+                video = null
+            ),
+            BannerItem(
+                id = "b3",
+                title = cinematicTitle,
+                subtitle = cinematicSubtitle,
+                imageUrl = "https://images.unsplash.com/photo-1489599849927-2ee91cede3ba?w=800",
+                tag = ultraHdTag,
+                video = null
+            )
+        )
+
+    }
+
+    val pageCount = bannerItems.size
+    val pagerState = rememberPagerState(pageCount = { pageCount })
+
+    LaunchedEffect(pageCount) {
+        if (pageCount > 1) {
+            while (true) {
+                delay(4500L)
+                if (!pagerState.isScrollInProgress) {
+                    val next = (pagerState.currentPage + 1) % pageCount
+                    pagerState.animateScrollToPage(next)
+                }
+            }
+        }
+    }
+
+    Column(modifier = modifier.fillMaxWidth()) {
+        HorizontalPager(
+            state = pagerState,
+            modifier = Modifier
+                .fillMaxWidth()
+                .height(210.dp),
+            contentPadding = PaddingValues(horizontal = 16.dp),
+            pageSpacing = 12.dp
+        ) { page ->
+            val item = bannerItems[page]
+            BannerCard(
+                item = item,
+                onClick = {
+                    item.video?.let(onVideoClick)
+                }
+            )
+        }
+
+        if (pageCount > 1) {
+            Spacer(modifier = Modifier.height(10.dp))
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.Center,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                repeat(pageCount) { index ->
+                    val isSelected = pagerState.currentPage == index
+                    Box(
+                        modifier = Modifier
+                            .padding(horizontal = 3.dp)
+                            .height(4.dp)
+                            .width(if (isSelected) 20.dp else 6.dp)
+                            .clip(RoundedCornerShape(2.dp))
+                            .background(
+                                if (isSelected) ElectricGreen else Color.White.copy(alpha = 0.25f)
+                            )
+                    )
+                }
+            }
+        }
+    }
+}
+
+@Composable
+fun BannerCard(
+    item: BannerItem,
+    onClick: () -> Unit
+) {
+    Card(
+        modifier = Modifier
+            .fillMaxSize()
+            .clickable { onClick() },
+        shape = RoundedCornerShape(18.dp),
+        colors = CardDefaults.cardColors(containerColor = MaterialTheme.colorScheme.surface)
+    ) {
+        Box(modifier = Modifier.fillMaxSize()) {
+            AsyncImage(
+                model = item.imageUrl,
+                contentDescription = item.title,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+
+            // Vignette gradient overlay
+            Box(
+                modifier = Modifier
+                    .fillMaxSize()
+                    .background(
+                        Brush.verticalGradient(
+                            colors = listOf(
+                                Color.Black.copy(alpha = 0.25f),
+                                Color.Black.copy(alpha = 0.45f),
+                                Color.Black.copy(alpha = 0.92f)
+                            ),
+                            startY = 40f
+                        )
+                    )
+            )
+
+            // Badge in top-right corner
+           /* Box(
+                modifier = Modifier
+                    .align(Alignment.TopEnd)
+                    .padding(14.dp)
+                    .background(
+                        color = Color.Black.copy(alpha = 0.65f),
+                        shape = RoundedCornerShape(4.dp)
+                    )
+                    .border(
+                        width = 0.8.dp,
+                        color = ElectricGreen.copy(alpha = 0.7f),
+                        shape = RoundedCornerShape(4.dp)
+                    )
+                    .padding(horizontal = 6.dp, vertical = 2.dp)
+            ) {
+                Text(
+                    text = item.tag,
+                    style = MaterialTheme.typography.labelSmall.copy(
+                        color = ElectricGreen,
+                        fontWeight = FontWeight.Bold,
+                        fontSize = 10.sp,
+                        letterSpacing = 0.5.sp
+                    )
+                )
+            }*/
+
+            // Bottom Content
+           /* Row(
+                modifier = Modifier
+                    .align(Alignment.BottomStart)
+                    .fillMaxWidth()
+                    .padding(horizontal = 16.dp, vertical = 14.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                // Play Button with neon green circular border
+                Box(
+                    modifier = Modifier
+                        .size(44.dp)
+                        .clip(CircleShape)
+                        .background(Color.Black.copy(alpha = 0.55f))
+                        .border(BorderStroke(2.dp, ElectricGreen), CircleShape),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.PlayArrow,
+                        contentDescription = stringResource(R.string.play_desc),
+                        tint = ElectricGreen,
+                        modifier = Modifier.size(24.dp)
+                    )
+                }
+
+                Spacer(modifier = Modifier.width(12.dp))
+
+                Column(modifier = Modifier.weight(1f)) {
+                    Text(
+                        text = item.title,
+                        style = MaterialTheme.typography.titleMedium.copy(
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 15.sp
+                        ),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                    Spacer(modifier = Modifier.height(3.dp))
+                    Text(
+                        text = item.subtitle,
+                        style = MaterialTheme.typography.bodySmall.copy(
+                            color = Color(0xFFB0B8B2),
+                            fontSize = 11.5.sp
+                        ),
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis
+                    )
+                }
+            }*/
         }
     }
 }
@@ -423,7 +631,7 @@ fun SectionHeader(
                 modifier = Modifier.clickable { onViewAllClick() }
             ) {
                 Text(
-                    text = "View All",
+                    text = stringResource(R.string.view_all),
                     style = MaterialTheme.typography.labelMedium.copy(
                         color = ElectricGreen,
                         fontWeight = FontWeight.Bold,
@@ -433,7 +641,7 @@ fun SectionHeader(
                 Spacer(modifier = Modifier.width(2.dp))
                 Icon(
                     imageVector = Icons.Default.ChevronRight,
-                    contentDescription = "View All",
+                    contentDescription = stringResource(R.string.view_all),
                     tint = ElectricGreen,
                     modifier = Modifier.size(16.dp)
                 )
@@ -448,8 +656,9 @@ fun ContinueWatchingCard(
     onClick: () -> Unit
 ) {
     val displayTitle = history?.title ?: ""
+    val continueWatchingText = stringResource(R.string.continue_watching)
     val displaySubtitle = if (history != null) {
-        "Continue Watching • ${formatDuration(history.lastPosition)}"
+        "$continueWatchingText • ${formatDuration(history.lastPosition)}"
     } else {
         ""
     }
@@ -517,7 +726,7 @@ fun ContinueWatchingCard(
                     .padding(horizontal = 6.dp, vertical = 2.dp)
             ) {
                 Text(
-                    text = "HD",
+                    text = stringResource(R.string.hd_label),
                     style = MaterialTheme.typography.labelSmall.copy(
                         color = Color.White,
                         fontWeight = FontWeight.Bold,
@@ -548,7 +757,7 @@ fun ContinueWatchingCard(
                     ) {
                         Icon(
                             Icons.Default.PlayArrow,
-                            contentDescription = "Play",
+                            contentDescription = stringResource(R.string.play_desc),
                             tint = ElectricGreen,
                             modifier = Modifier.size(26.dp)
                         )
@@ -679,7 +888,7 @@ fun RecentVideoCard(
         ) {
             Text(
                 text = title,
-                modifier = Modifier.weight(1f),
+                modifier = Modifier.fillMaxWidth(),
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
                 style = MaterialTheme.typography.bodySmall.copy(
@@ -687,12 +896,6 @@ fun RecentVideoCard(
                     color = MaterialTheme.colorScheme.onBackground,
                     fontSize = 13.sp
                 )
-            )
-            Icon(
-                Icons.Default.MoreVert,
-                contentDescription = "More",
-                tint = MaterialTheme.colorScheme.onBackground.copy(alpha = 0.65f),
-                modifier = Modifier.size(16.dp)
             )
         }
 
@@ -703,6 +906,94 @@ fun RecentVideoCard(
                 color = MutedGray,
                 fontSize = 11.sp
             ),
+            modifier = Modifier.padding(top = 1.dp)
+        )
+    }
+}
+
+@Composable
+fun OnlineCatalogCard(
+    video: Video,
+    progress: Float = 0f,
+    onClick: () -> Unit
+) {
+    Column(
+        modifier = Modifier
+            .width(160.dp)
+            .clickable { onClick() }
+    ) {
+        Box(
+            modifier = Modifier
+                .height(96.dp)
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(14.dp))
+        ) {
+            AsyncImage(
+                model = video.thumbnailUrl ?: video.url,
+                contentDescription = video.title,
+                modifier = Modifier.fillMaxSize(),
+                contentScale = ContentScale.Crop
+            )
+
+            // Duration Pill Overlay on bottom-right of thumbnail
+            if (video.duration > 0) {
+                Box(
+                    modifier = Modifier
+                        .align(Alignment.BottomEnd)
+                        .padding(6.dp)
+                        .background(Color.Black.copy(alpha = 0.78f), RoundedCornerShape(4.dp))
+                        .padding(horizontal = 5.dp, vertical = 2.dp)
+                ) {
+                    Text(
+                        text = formatDuration(video.duration),
+                        style = MaterialTheme.typography.labelSmall.copy(
+                            color = Color.White,
+                            fontWeight = FontWeight.Bold,
+                            fontSize = 10.sp
+                        )
+                    )
+                }
+            }
+
+            // Progress Bar at the bottom of the thumbnail
+            if (progress > 0) {
+                LinearProgressIndicator(
+                    progress = progress,
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .height(3.dp)
+                        .align(Alignment.BottomCenter),
+                    color = ElectricGreen,
+                    trackColor = Color.Transparent
+                )
+            }
+        }
+
+        // Title
+        Text(
+            text = video.title,
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 6.dp),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
+            style = MaterialTheme.typography.bodySmall.copy(
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onBackground,
+                fontSize = 13.sp
+            )
+        )
+
+        // Subtitle / category
+        val subtitle = video.category ?: video.type.name.lowercase().replaceFirstChar { it.titlecase() }
+        Text(
+            text = subtitle,
+            style = MaterialTheme.typography.labelSmall.copy(
+                color = MutedGray,
+                fontSize = 11.sp
+            ),
+            maxLines = 1,
+            overflow = TextOverflow.Ellipsis,
             modifier = Modifier.padding(top = 1.dp)
         )
     }
@@ -959,6 +1250,88 @@ fun ThemedFolderCard(
 }
 
 @Composable
+fun FolderListItem(
+    folderName: String,
+    videos: List<Video>,
+    onClick: () -> Unit
+) {
+    Row(
+        modifier = Modifier
+            .fillMaxWidth()
+            .clickable { onClick() }
+            .padding(horizontal = 16.dp, vertical = 10.dp)
+            .background(color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        Box(
+            modifier = Modifier
+                .size(64.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)),
+            contentAlignment = Alignment.Center
+        ) {
+            val firstThumbnail = remember(videos) {
+                videos.firstOrNull { !it.thumbnailUrl.isNullOrEmpty() }?.thumbnailUrl
+                    ?: videos.firstOrNull()?.url
+            }
+            if (!firstThumbnail.isNullOrEmpty()) {
+//                AsyncImage(
+//                    model = null,
+//                    contentDescription = null,
+//                    modifier = Modifier.fillMaxSize(),
+//                    contentScale = ContentScale.Crop
+//                )
+                Box(
+                    modifier = Modifier
+                        .fillMaxSize()
+                        .background(Color.Black.copy(alpha = 0.4f)),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Icon(
+                        Icons.Default.Folder,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.size(26.dp)
+                    )
+                }
+            } else {
+                Icon(
+                    Icons.Default.Folder,
+                    contentDescription = null,
+                    tint = ElectricGreen,
+                    modifier = Modifier.size(28.dp)
+                )
+            }
+        }
+
+        Spacer(modifier = Modifier.width(14.dp))
+        Column(modifier = Modifier.weight(1f)) {
+            Text(
+                text = folderName,
+                style = MaterialTheme.typography.bodyLarge.copy(
+                    fontWeight = FontWeight.Bold,
+                    color = MaterialTheme.colorScheme.onBackground
+                ),
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+            val videoSuffix = if (videos.size == 1) stringResource(R.string.video_singular) else stringResource(R.string.videos_plural)
+            Text(
+                text = "${videos.size} $videoSuffix",
+                style = MaterialTheme.typography.bodySmall.copy(color = Color.Gray)
+            )
+        }
+
+        Icon(
+            Icons.Default.ChevronRight,
+            contentDescription = stringResource(R.string.open_folder_desc),
+            tint = Color.Gray,
+            modifier = Modifier.size(20.dp)
+        )
+    }
+}
+
+@Composable
 fun VideoListItem(
     video: Video,
     progress: Float = 0f,
@@ -1019,7 +1392,7 @@ fun VideoListItem(
         // a DropdownMenu directly to this button (positioned like a leaf).
         Box {
             IconButton(onClick = onShare) {
-                Icon(Icons.Default.MoreVert, contentDescription = "Options", tint = Color.Gray)
+                Icon(Icons.Default.MoreVert, contentDescription = stringResource(R.string.options_desc), tint = Color.Gray)
             }
             dropdownContent?.invoke(this)
         }
@@ -1039,21 +1412,21 @@ private fun formatDuration(ms: Long): String {
     }
 }
 
-private fun formatRelativeDate(timestamp: Long): String {
+private fun formatRelativeDate(context: Context, timestamp: Long): String {
     if (timestamp <= 0) return ""
     val now = System.currentTimeMillis()
     val timeMs = if (timestamp < 10000000000L) timestamp * 1000 else timestamp
     val diff = now - timeMs
-    if (diff < 0) return "Just now"
+    if (diff < 0) return context.getString(R.string.just_now)
     val minutes = diff / (1000 * 60)
     val hours = diff / (1000 * 60 * 60)
     val days = diff / (1000 * 60 * 60 * 24)
     return when {
-        minutes < 60 -> if (minutes <= 1) "Just now" else "$minutes min ago"
-        hours < 24 -> "$hours hours ago"
-        days == 1L -> "Yesterday"
-        days < 30 -> "$days days ago"
-        days < 365 -> "${days / 30} months ago"
-        else -> "${days / 365} years ago"
+        minutes < 60 -> if (minutes <= 1) context.getString(R.string.just_now) else context.getString(R.string.min_ago, minutes)
+        hours < 24 -> context.getString(R.string.hours_ago, hours)
+        days == 1L -> context.getString(R.string.yesterday)
+        days < 30 -> context.getString(R.string.days_ago, days)
+        days < 365 -> context.getString(R.string.months_ago, days / 30)
+        else -> context.getString(R.string.years_ago, days / 365)
     }
 }
