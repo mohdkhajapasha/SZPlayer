@@ -31,6 +31,8 @@ class VideoUrlChecker(
         .build()
 ) {
 
+    private val userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+
     fun validateUrlSyntax(urlString: String): Result<String> {
         val trimmed = urlString.trim()
         if (trimmed.isBlank()) {
@@ -77,7 +79,7 @@ class VideoUrlChecker(
             val headRequest = Request.Builder()
                 .url(validUrl)
                 .head()
-                .header("User-Agent", "SZPlayer/1.0 (Linux; Android)")
+                .header("User-Agent", userAgent)
                 .build()
 
             client.newCall(headRequest).execute().use { response ->
@@ -85,12 +87,20 @@ class VideoUrlChecker(
                     val contentType = response.header("Content-Type")
                     val contentLength = parseContentLength(response)
                     val effectiveUrl = response.request.url.toString()
+                    
+                    val isHtml = contentType == null ||
+                            contentType.contains("text/html", ignoreCase = true) ||
+                            contentType.contains("application/xhtml", ignoreCase = true) ||
+                            !contentType.startsWith("video/", ignoreCase = true)
+                    val initialBytes = if (isHtml) fetchInitialBytes(effectiveUrl) else null
+
                     return UrlCheckResponse(
                         isAccessible = true,
                         statusCode = response.code,
                         contentType = contentType,
                         contentLength = contentLength,
-                        effectiveUrl = effectiveUrl
+                        effectiveUrl = effectiveUrl,
+                        initialBytes = initialBytes
                     )
                 }
                 // If HEAD returns 405 (Method Not Allowed) or 403 (Forbidden on HEAD only),
@@ -130,13 +140,14 @@ class VideoUrlChecker(
             // Fall through to GET fallback in case HEAD is not supported by endpoint
         }
 
-        // 2. Fallback: GET request with byte range (bytes=0-8191) to fetch headers and initial magic bytes
+        // 2. Fallback: GET request with byte range (bytes=0-65535) to fetch headers and initial magic bytes
         return try {
             val getRequest = Request.Builder()
                 .url(validUrl)
                 .get()
-                .header("User-Agent", "SZPlayer/1.0 (Linux; Android)")
-                .header("Range", "bytes=0-8191")
+                .header("User-Agent", userAgent)
+                .header("Range", "bytes=0-65535")
+                .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,video/*,*/*;q=0.8")
                 .build()
 
             client.newCall(getRequest).execute().use { response ->
@@ -146,9 +157,9 @@ class VideoUrlChecker(
                     val effectiveUrl = response.request.url.toString()
                     val bodyBytes = try {
                         response.body?.byteStream()?.use { stream ->
-                            val buf = ByteArray(8192)
+                            val buf = ByteArray(65536)
                             val out = java.io.ByteArrayOutputStream()
-                            var remaining = 8192
+                            var remaining = 65536
                             var n = 0
                             while (remaining > 0 && stream.read(buf, 0, minOf(buf.size, remaining)).also { n = it } != -1) {
                                 out.write(buf, 0, n)
@@ -245,5 +256,34 @@ class VideoUrlChecker(
             if (total != null && total > 0) return total
         }
         return parseContentLength(response)
+    }
+
+    private fun fetchInitialBytes(url: String): ByteArray? {
+        return try {
+            val req = Request.Builder()
+                .url(url)
+                .get()
+                .header("User-Agent", userAgent)
+                .header("Range", "bytes=0-65535")
+                .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
+                .build()
+            client.newCall(req).execute().use { response ->
+                if (response.isSuccessful || response.code == 206) {
+                    response.body?.byteStream()?.use { stream ->
+                        val buf = ByteArray(65536)
+                        val out = java.io.ByteArrayOutputStream()
+                        var remaining = 65536
+                        var n = 0
+                        while (remaining > 0 && stream.read(buf, 0, minOf(buf.size, remaining)).also { n = it } != -1) {
+                            out.write(buf, 0, n)
+                            remaining -= n
+                        }
+                        out.toByteArray()
+                    }
+                } else null
+            }
+        } catch (e: Exception) {
+            null
+        }
     }
 }

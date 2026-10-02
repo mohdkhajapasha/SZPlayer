@@ -60,6 +60,12 @@ class HomeViewModel(
         }
     }
 
+    fun deleteVideo(video: Video) {
+        viewModelScope.launch {
+            repository.deleteVideo(video.id)
+        }
+    }
+
     class Factory(
         private val repository: VideoRepository,
         private val playlistDao: PlaylistDao? = null

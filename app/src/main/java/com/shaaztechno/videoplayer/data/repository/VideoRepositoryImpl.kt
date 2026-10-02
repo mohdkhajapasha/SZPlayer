@@ -56,6 +56,12 @@ class VideoRepositoryImpl(
         }
     }
 
+    override suspend fun clearOnlineCatalog() {
+        withContext(Dispatchers.IO) {
+            videoDao.clearOnlineCatalog()
+        }
+    }
+
     override suspend fun refreshLocalVideos() {
         withContext(Dispatchers.IO) {
             val localVideos = mutableListOf<Video>()
@@ -173,13 +179,19 @@ class VideoRepositoryImpl(
         duration: Long
     ) {
         withContext(Dispatchers.IO) {
+            val cachedThumbFile = java.io.File(context.cacheDir, "video_thumbnails/thumb_${video.url.hashCode()}.jpg")
+            val resolvedThumbnailUrl = video.thumbnailUrl?.takeIf { it.isNotBlank() }
+                ?: if (cachedThumbFile.exists() && cachedThumbFile.length() > 0) {
+                    Uri.fromFile(cachedThumbFile).toString()
+                } else null
+
             historyDao.insertHistory(
                 HistoryEntity(
                     videoId = video.id,
                     title = video.title,
                     url = video.url,
                     type = video.type.name,
-                    thumbnailUrl = video.thumbnailUrl,
+                    thumbnailUrl = resolvedThumbnailUrl,
                     lastPosition = position,
                     duration = duration,
                     timestamp = System.currentTimeMillis()

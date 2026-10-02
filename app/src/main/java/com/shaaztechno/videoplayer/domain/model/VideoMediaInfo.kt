@@ -5,6 +5,9 @@ data class VideoMediaInfo(
     val title: String,
     val mediaType: String, // MP4, WebM, HLS Stream, DASH Stream, etc.
     val mimeType: String? = null,
+    val thumbnailUrl: String? = null,
+    val sourceName: String? = null,
+    val authorName: String? = null,
     val fileSize: Long? = null, // In bytes, null if unknown/variable
     val duration: Long? = null, // In ms, null if unknown
     val isPlayable: Boolean = true,

@@ -20,7 +20,7 @@ fun BannerAd(modifier: Modifier = Modifier) {
             AdView(context).apply {
                 setAdSize(AdSize.BANNER)
                 // Use standard test banner ad unit ID
-                adUnitId = "ca-app-pub-3940256099942544/6300978111"
+                adUnitId = "ca-app-pub-6151898268816293/6377229673"
                 loadAd(AdRequest.Builder().build())
             }
         }

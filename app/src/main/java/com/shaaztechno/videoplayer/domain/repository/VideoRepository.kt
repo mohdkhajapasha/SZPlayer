@@ -10,6 +10,7 @@ interface VideoRepository {
     fun getVideosByType(type: VideoType): Flow<List<Video>>
     suspend fun getVideoById(id: String): Video?
     suspend fun refreshOnlineCatalog()
+    suspend fun clearOnlineCatalog()
     suspend fun refreshLocalVideos()
     suspend fun addVideo(video: Video)
     suspend fun deleteVideo(id: String): Result<Unit>

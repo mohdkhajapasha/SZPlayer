@@ -78,9 +78,22 @@ class SZPlayerApplication : Application(), ImageLoaderFactory {
     override fun newImageLoader(): ImageLoader {
         return ImageLoader.Builder(this)
             .components {
+                add(com.shaaztechno.videoplayer.data.remote.VideoThumbnailFetcher.UriFactory(this@SZPlayerApplication, httpClient))
+                add(com.shaaztechno.videoplayer.data.remote.VideoThumbnailFetcher.StringFactory(this@SZPlayerApplication, httpClient))
                 add(VideoFrameDecoder.Factory())
             }
             .crossfade(true)
+            .diskCache {
+                coil.disk.DiskCache.Builder()
+                    .directory(cacheDir.resolve("coil_cache"))
+                    .maxSizeBytes(100L * 1024 * 1024)
+                    .build()
+            }
+            .memoryCache {
+                coil.memory.MemoryCache.Builder(this)
+                    .maxSizePercent(0.25)
+                    .build()
+            }
             .build()
     }
 }

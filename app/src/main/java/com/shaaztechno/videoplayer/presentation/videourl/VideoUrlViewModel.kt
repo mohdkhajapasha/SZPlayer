@@ -81,6 +81,7 @@ class VideoUrlViewModel(
                 id = videoId,
                 title = info.title,
                 url = info.url,
+                thumbnailUrl = info.thumbnailUrl,
                 duration = info.duration ?: 0L,
                 size = info.fileSize ?: 0L,
                 type = VideoType.ONLINE,

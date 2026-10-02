@@ -35,6 +35,10 @@ class SettingsViewModel(
         viewModelScope.launch { repository.clearHistory() }
     }
 
+    fun clearOnlineCatalog() {
+        viewModelScope.launch { repository.clearOnlineCatalog() }
+    }
+
     fun updateDarkMode(value: String) {
         viewModelScope.launch { settingsDataStore.updateDarkMode(value) }
     }

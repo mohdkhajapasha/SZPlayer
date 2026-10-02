@@ -44,22 +44,25 @@ class GoogleSheetParser(private val client: OkHttpClient) {
                             }
                             val title = if (titleIdx != -1 && titleIdx < parts.size) parts[titleIdx] else "Unknown Title"
                             
-                            videos.add(
-                                VideoEntity(
-                                    id = id,
-                                    title = title,
-                                    url = videoUrl,
-                                    thumbnailUrl = if (thumbIdx != -1 && thumbIdx < parts.size) parts[thumbIdx] else null,
-                                    description = if (descIdx != -1 && descIdx < parts.size) parts[descIdx] else null,
-                                    category = if (categoryIdx != -1 && categoryIdx < parts.size) parts[categoryIdx] else null,
-                                    duration = if (durationIdx != -1 && durationIdx < parts.size) parts[durationIdx].toLongOrNull() ?: 0L else 0L,
-                                    type = VideoType.ONLINE.name,
-                                    localUri = null,
-                                    size = 0,
-                                    folder = "REMOTE_CATALOG", // Use folder field to distinguish from user-added ONLINE videos
-                                    dateAdded = System.currentTimeMillis()
-                                )
-                            )
+                                    val rawThumb = if (thumbIdx != -1 && thumbIdx < parts.size) parts[thumbIdx].trim() else null
+                                    val resolvedThumb = sanitizeThumbnail(rawThumb, videoUrl)
+
+                                    videos.add(
+                                        VideoEntity(
+                                            id = id,
+                                            title = title,
+                                            url = videoUrl,
+                                            thumbnailUrl = resolvedThumb,
+                                            description = if (descIdx != -1 && descIdx < parts.size) parts[descIdx] else null,
+                                            category = if (categoryIdx != -1 && categoryIdx < parts.size) parts[categoryIdx] else null,
+                                            duration = if (durationIdx != -1 && durationIdx < parts.size) parts[durationIdx].toLongOrNull() ?: 0L else 0L,
+                                            type = VideoType.ONLINE.name,
+                                            localUri = null,
+                                            size = 0,
+                                            folder = "REMOTE_CATALOG", // Use folder field to distinguish from user-added ONLINE videos
+                                            dateAdded = System.currentTimeMillis()
+                                        )
+                                    )
                         }
                     }
                 }
@@ -103,5 +106,28 @@ class GoogleSheetParser(private val client: OkHttpClient) {
         }
         result.add(cur.toString())
         return result
+    }
+
+    private fun sanitizeThumbnail(rawThumb: String?, videoUrl: String): String? {
+        if (!rawThumb.isNullOrBlank()) {
+            val trimmed = rawThumb.trim()
+            // Convert Google Drive view links to direct image links
+            val drivePattern = java.util.regex.Pattern.compile("drive\\.google\\.com/(?:file/d/|open\\?id=)([a-zA-Z0-9_-]+)")
+            val driveMatcher = drivePattern.matcher(trimmed)
+            if (driveMatcher.find()) {
+                val fileId = driveMatcher.group(1)
+                return "https://drive.google.com/uc?export=view&id=$fileId"
+            }
+            return trimmed
+        }
+        return getYouTubeThumbnail(videoUrl)
+    }
+
+    private fun getYouTubeThumbnail(url: String): String? {
+        val matcher = java.util.regex.Pattern.compile(
+            "(?:youtube\\.com/(?:[^/]+/.+/|(?:v|e(?:mbed)?)/|.*[?&]v=)|youtu\\.be/)([^\"&?/\\s]{11})",
+            java.util.regex.Pattern.CASE_INSENSITIVE
+        ).matcher(url)
+        return if (matcher.find()) "https://img.youtube.com/vi/${matcher.group(1)}/hqdefault.jpg" else null
     }
 }

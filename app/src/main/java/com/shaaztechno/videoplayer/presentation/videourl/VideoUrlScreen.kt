@@ -15,11 +15,15 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.platform.LocalClipboardManager
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.shaaztechno.videoplayer.domain.model.VideoMediaInfo
 import com.shaaztechno.videoplayer.presentation.components.BannerAd
 import com.shaaztechno.videoplayer.ui.theme.BorderSubtle
@@ -399,6 +403,39 @@ private fun SuccessResultCard(
                 }
             }
 
+            // Video Preview (Thumbnail or Frame)
+            val previewModel = mediaInfo.thumbnailUrl ?: mediaInfo.url
+            Box(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(210.dp)
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(Color(0xFF141923))
+            ) {
+                AsyncImage(
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(previewModel)
+                        .crossfade(true)
+                        .build(),
+                    contentDescription = mediaInfo.title,
+                    modifier = Modifier.fillMaxSize(),
+                    contentScale = ContentScale.Crop
+                )
+                
+                Surface(
+                    modifier = Modifier.align(Alignment.Center),
+                    shape = RoundedCornerShape(50),
+                    color = Color.Black.copy(alpha = 0.55f)
+                ) {
+                    Icon(
+                        Icons.Default.PlayArrow,
+                        contentDescription = null,
+                        tint = Color.White,
+                        modifier = Modifier.padding(14.dp).size(36.dp)
+                    )
+                }
+            }
+
             // Video Title
             Text(
                 text = mediaInfo.title,
@@ -558,8 +595,7 @@ private fun ErrorResultCard(
                     .fillMaxWidth()
                     .height(46.dp),
                 shape = RoundedCornerShape(23.dp),
-                border = BorderStroke(1.dp, BorderSubtle),
-                colors = ButtonDefaults.outlinedButtonColors(contentColor = MaterialTheme.colorScheme.onSurface)
+                border = BorderStroke(1.dp, BorderSubtle)
             ) {
                 Icon(
                     imageVector = Icons.Default.Refresh,

@@ -38,12 +38,12 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
+import coil.request.ImageRequest
 import com.shaaztechno.videoplayer.R
 import com.shaaztechno.videoplayer.data.local.entity.HistoryEntity
 import com.shaaztechno.videoplayer.domain.model.Video
 import com.shaaztechno.videoplayer.presentation.components.BannerAd
-import com.shaaztechno.videoplayer.ui.theme.ElectricGreen
-import com.shaaztechno.videoplayer.ui.theme.MutedGray
+import com.shaaztechno.videoplayer.ui.theme.*
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
@@ -120,7 +120,7 @@ fun HomeScreen(
                                 style = MaterialTheme.typography.labelSmall.copy(
                                     fontWeight = FontWeight.SemiBold,
                                     letterSpacing = 1.2.sp,
-                                    color = Color(0xFF7E8A82),
+                                    color = MutedGray,
                                     fontSize = 8.sp
                                 )
                             )
@@ -155,7 +155,7 @@ fun HomeScreen(
             FloatingActionButton(
                 onClick = onAddVideoClick,
                 containerColor = ElectricGreen,
-                contentColor = Color.Black,
+                contentColor = Black,
                 shape = CircleShape,
                 modifier = Modifier.size(56.dp)
             ) {
@@ -316,7 +316,56 @@ fun HomeScreen(
                             OnlineCatalogCard(
                                 video = video,
                                 progress = progress,
-                                onClick = { onVideoClick(video) }
+                                onClick = { onVideoClick(video) },
+                                optionsContent = {
+                                    var showMenu by remember { mutableStateOf(false) }
+                                    IconButton(
+                                        onClick = { showMenu = true },
+                                        modifier = Modifier.size(24.dp)
+                                    ) {
+                                        Icon(
+                                            imageVector = Icons.Default.MoreVert,
+                                            contentDescription = null,
+                                            tint = MutedGray,
+                                            modifier = Modifier.size(18.dp)
+                                        )
+                                    }
+                                    DropdownMenu(
+                                        expanded = showMenu,
+                                        onDismissRequest = { showMenu = false }
+                                    ) {
+                                        DropdownMenuItem(
+                                            text = { Text("Play") },
+                                            onClick = {
+                                                onVideoClick(video)
+                                                showMenu = false
+                                            },
+                                            leadingIcon = {
+                                                Icon(Icons.Default.PlayArrow, contentDescription = null, tint = Color.White)
+                                            }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("Share") },
+                                            onClick = {
+                                                onShareClick(video)
+                                                showMenu = false
+                                            },
+                                            leadingIcon = {
+                                                Icon(Icons.Default.Share, contentDescription = null, tint = Color.White)
+                                            }
+                                        )
+                                        DropdownMenuItem(
+                                            text = { Text("Delete") },
+                                            onClick = {
+                                                viewModel.deleteVideo(video)
+                                                showMenu = false
+                                            },
+                                            leadingIcon = {
+                                                Icon(Icons.Default.Delete, contentDescription = null, tint = Color.Red)
+                                            }
+                                        )
+                                    }
+                                }
                             )
                         }
                     }
@@ -376,6 +425,10 @@ fun HomeScreen(
                         )
                     )
                 }
+            }
+            // Ad above Local Videos
+            item {
+                BannerAd(modifier = Modifier.padding(top = 16.dp))
             }
         }
     }
@@ -485,7 +538,7 @@ fun BannerCarousel(
                             if (isSelected) {
                                 ElectricGreen
                             } else {
-                                Color(0xFF64717C)
+                                InactiveIndicator
                             }
                         )
                         .border(
@@ -516,7 +569,7 @@ fun BannerCard(
         ),
         border = BorderStroke(
             width = 1.dp,
-            color = Color(0xFF12627D)
+            color = BannerBorder
         ),
         elevation = CardDefaults.cardElevation(
             defaultElevation = 0.dp
@@ -651,11 +704,11 @@ fun ContinueWatchingCard(
             .clickable { onClick() },
         shape = RoundedCornerShape(16.dp),
         colors = CardDefaults.cardColors(
-            containerColor = Color(0xFF071017)
+            containerColor = DeepBlueGrey
         ),
         border = BorderStroke(
             width = 1.dp,
-            color = Color(0xFF203B4D)
+            color = BorderBlueGrey
         )
     ) {
         Row(
@@ -673,10 +726,14 @@ fun ContinueWatchingCard(
                     .width(120.dp)
                     .fillMaxHeight()
                     .clip(RoundedCornerShape(12.dp))
+                    .background(Color(0xFF141923))
             ) {
 
                 AsyncImage(
-                    model = displayImage,
+                    model = ImageRequest.Builder(LocalContext.current)
+                        .data(displayImage)
+                        .crossfade(true)
+                        .build(),
                     contentDescription = displayTitle,
                     modifier = Modifier.fillMaxSize(),
                     contentScale = ContentScale.Crop
@@ -788,7 +845,7 @@ fun ContinueWatchingCard(
                     Icon(
                         imageVector = Icons.Default.Folder,
                         contentDescription = null,
-                        tint = Color(0xFFC5D0D8),
+                        tint = MutedGray,
                         modifier = Modifier.size(20.dp)
                     )
 
@@ -798,7 +855,7 @@ fun ContinueWatchingCard(
                         text = "Local Videos",
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
-                        color = Color(0xFFB8C4CD),
+                        color = MutedGray,
                         fontSize = 11.sp
                     )
                 }
@@ -817,7 +874,7 @@ fun ContinueWatchingCard(
                             .height(6.dp)
                             .clip(RoundedCornerShape(4.dp))
                             .background(
-                                Color(0xFF334654)
+                                ProgressTrackDark
                             )
                     ) {
                         Box(
@@ -856,7 +913,7 @@ fun ContinueWatchingCard(
                 Icon(
                     imageVector = Icons.Default.PlayArrow,
                     contentDescription = stringResource(R.string.play_desc),
-                    tint = Color.Black,
+                    tint = Black,
                     modifier = Modifier.size(18.dp)
                 )
             }
@@ -883,9 +940,13 @@ fun RecentVideoCard(
                 .height(92.dp)
                 .fillMaxWidth()
                 .clip(RoundedCornerShape(14.dp))
+                .background(Color(0xFF141923))
         ) {
             AsyncImage(
-                model = thumbnailUrl,
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(thumbnailUrl)
+                    .crossfade(true)
+                    .build(),
                 contentDescription = null,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop
@@ -959,7 +1020,8 @@ fun RecentVideoCard(
 fun OnlineCatalogCard(
     video: Video,
     progress: Float = 0f,
-    onClick: () -> Unit
+    onClick: () -> Unit,
+    optionsContent: (@Composable BoxScope.() -> Unit)? = null
 ) {
     Column(
         modifier = Modifier
@@ -973,10 +1035,14 @@ fun OnlineCatalogCard(
                 .fillMaxWidth()
                 .aspectRatio(16f / 9f)
                 .clip(RoundedCornerShape(14.dp))
+                .background(Color(0xFF141923))
         ) {
 
             AsyncImage(
-                model = video.thumbnailUrl ?: video.url,
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(video.thumbnailUrl ?: video.url)
+                    .crossfade(true)
+                    .build(),
                 contentDescription = video.title,
                 modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop
@@ -1038,19 +1104,33 @@ fun OnlineCatalogCard(
 
         Spacer(modifier = Modifier.height(7.dp))
 
-        // Video title
-        Text(
-            text = video.title,
-            modifier = Modifier.padding(horizontal = 2.dp),
-            maxLines = 2,
-            overflow = TextOverflow.Ellipsis,
-            style = MaterialTheme.typography.bodyMedium.copy(
-                fontWeight = FontWeight.SemiBold,
-                fontSize = 13.sp,
-                lineHeight = 17.sp,
-                color = MaterialTheme.colorScheme.onBackground
+        // Video title and options
+        Row(
+            modifier = Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.Top
+        ) {
+            Text(
+                text = video.title,
+                modifier = Modifier
+                    .weight(1f)
+                    .padding(horizontal = 2.dp),
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis,
+                style = MaterialTheme.typography.bodyMedium.copy(
+                    fontWeight = FontWeight.SemiBold,
+                    fontSize = 13.sp,
+                    lineHeight = 17.sp,
+                    color = MaterialTheme.colorScheme.onBackground
+                )
             )
-        )
+            
+            if (optionsContent != null) {
+                Box(modifier = Modifier.padding(top = 0.dp)) {
+                    optionsContent()
+                }
+            }
+        }
 
         Spacer(modifier = Modifier.height(3.dp))
 
@@ -1149,7 +1229,7 @@ fun PlaylistHeroCard(
                         modifier = Modifier
                             .size(32.dp)
                             .clip(CircleShape)
-                            .background(Color(0xFF142B18).copy(alpha = 0.85f)),
+                            .background(PillGreen.copy(alpha = 0.85f)),
                         contentAlignment = Alignment.Center
                     ) {
                         Icon(
@@ -1181,7 +1261,7 @@ fun PlaylistHeroCard(
                     Text(
                         text = videoCount,
                         style = MaterialTheme.typography.labelSmall.copy(
-                            color = Color(0xFFB0B0B0),
+                            color = MutedGray,
                             fontSize = 11.sp
                         )
                     )
@@ -1207,7 +1287,7 @@ fun FolderCard(
             .clickable { onClick() },
         shape = RoundedCornerShape(14.dp),
         colors = CardDefaults.cardColors(
-            containerColor = Color(0xFF181818)
+            containerColor = SurfaceDark
         ),
         border = BorderStroke(
             width = 1.dp,
@@ -1297,13 +1377,19 @@ fun VideoListItem(
             .padding(horizontal = 16.dp, vertical = 10.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Box(modifier = Modifier.size(64.dp)) {
+        Box(
+            modifier = Modifier
+                .size(64.dp)
+                .clip(RoundedCornerShape(12.dp))
+                .background(Color(0xFF141923))
+        ) {
             AsyncImage(
-                model = video.thumbnailUrl ?: video.url,
+                model = ImageRequest.Builder(LocalContext.current)
+                    .data(video.thumbnailUrl ?: video.url)
+                    .crossfade(true)
+                    .build(),
                 contentDescription = null,
-                modifier = Modifier
-                    .fillMaxSize()
-                    .clip(RoundedCornerShape(12.dp)),
+                modifier = Modifier.fillMaxSize(),
                 contentScale = ContentScale.Crop
             )
 
