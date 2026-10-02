@@ -1,0 +1,9 @@
+{
+  "versionCode": 1,
+  "versionName": "1.0.0",
+  "releaseNotes": [
+    "Initial release of SZ Player"
+  ],
+  "apkUrl": "https://github.com/YOUR_USERNAME/SZ-Player/releases/download/v1.0.0/SZ-Player-1.0.0.apk",
+  "forceUpdate": false
+}
