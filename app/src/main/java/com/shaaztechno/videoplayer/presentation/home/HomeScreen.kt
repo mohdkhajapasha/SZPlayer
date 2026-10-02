@@ -42,6 +42,7 @@ import coil.request.ImageRequest
 import com.shaaztechno.videoplayer.R
 import com.shaaztechno.videoplayer.data.local.entity.HistoryEntity
 import com.shaaztechno.videoplayer.domain.model.Video
+import com.shaaztechno.videoplayer.domain.model.VideoType
 import com.shaaztechno.videoplayer.presentation.components.BannerAd
 import com.shaaztechno.videoplayer.ui.theme.*
 
@@ -696,6 +697,10 @@ fun ContinueWatchingCard(
     val progressPercent = (progress * 100).toInt()
     val durationText = formatDuration(history.duration)
 
+    val isOnline = history.type == VideoType.ONLINE.name
+    val sourceText = if (isOnline) stringResource(R.string.online_video) else stringResource(R.string.local_videos)
+    val sourceIcon = if (isOnline) Icons.Default.Language else Icons.Default.Folder
+
     Card(
         modifier = Modifier
             .fillMaxWidth()
@@ -843,7 +848,7 @@ fun ContinueWatchingCard(
                     verticalAlignment = Alignment.CenterVertically
                 ) {
                     Icon(
-                        imageVector = Icons.Default.Folder,
+                        imageVector = sourceIcon,
                         contentDescription = null,
                         tint = MutedGray,
                         modifier = Modifier.size(20.dp)
@@ -852,7 +857,7 @@ fun ContinueWatchingCard(
                     Spacer(modifier = Modifier.width(6.dp))
 
                     Text(
-                        text = "Local Videos",
+                        text = sourceText,
                         maxLines = 1,
                         overflow = TextOverflow.Ellipsis,
                         color = MutedGray,
@@ -1419,8 +1424,13 @@ fun VideoListItem(
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis
             )
+            val typeText = when(video.type) {
+                VideoType.ONLINE -> stringResource(R.string.online_video)
+                VideoType.LOCAL -> stringResource(R.string.local_video)
+                VideoType.DOWNLOADED -> "Downloaded"
+            }
             Text(
-                text = video.type.name.lowercase().replaceFirstChar { it.titlecase() } +
+                text = typeText +
                         if (video.duration > 0) " • ${formatDuration(video.duration)}" else "",
                 style = MaterialTheme.typography.bodySmall.copy(color = Color.Gray)
             )

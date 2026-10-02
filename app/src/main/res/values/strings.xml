@@ -86,6 +86,7 @@
     <string name="days_ago">%1$d days ago</string>
     <string name="months_ago">%1$d months ago</string>
     <string name="years_ago">%1$d years ago</string>
+    <string name="online_video">Online Video</string>
 
     <!-- Settings Screen Strings -->
     <string name="settings_upper">SETTINGS</string>
