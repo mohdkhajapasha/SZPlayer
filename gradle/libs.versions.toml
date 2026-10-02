@@ -1,7 +1,7 @@
 [versions]
 agp = "8.7.3"
-kotlin = "2.0.21"
-ksp = "2.0.21-1.0.25"
+kotlin = "2.1.0"
+ksp = "2.1.0-1.0.29"
 coreKtx = "1.15.0"
 junit = "4.13.2"
 junitVersion = "1.2.1"
@@ -19,6 +19,9 @@ coroutines = "1.10.1"
 retrofit = "2.11.0"
 coreSplashscreen = "1.0.1"
 playServicesAds = "23.6.0"
+googleServices = "4.5.0"
+firebaseCrashlytics = "3.0.8"
+firebaseBom = "34.19.0"
 
 [libraries]
 androidx-core-ktx = { group = "androidx.core", name = "core-ktx", version.ref = "coreKtx" }
@@ -66,9 +69,15 @@ converter-scalars = { group = "com.squareup.retrofit2", name = "converter-scalar
 
 play-services-ads = { group = "com.google.android.gms", name = "play-services-ads", version.ref = "playServicesAds" }
 
+firebase-bom = { group = "com.google.firebase", name = "firebase-bom", version.ref = "firebaseBom" }
+firebase-analytics = { group = "com.google.firebase", name = "firebase-analytics" }
+firebase-crashlytics = { group = "com.google.firebase", name = "firebase-crashlytics" }
+
 [plugins]
 androidApplication = { id = "com.android.application", version.ref = "agp" }
 kotlinAndroid = { id = "org.jetbrains.kotlin.android", version.ref = "kotlin" }
 compose-compiler = { id = "org.jetbrains.kotlin.plugin.compose", version.ref = "kotlin" }
 ksp = { id = "com.google.devtools.ksp", version.ref = "ksp" }
 kapt = { id = "org.jetbrains.kotlin.kapt", version.ref = "kotlin" }
+googleServices = { id = "com.google.gms.google-services", version.ref = "googleServices" }
+firebaseCrashlytics = { id = "com.google.firebase.crashlytics", version.ref = "firebaseCrashlytics" }

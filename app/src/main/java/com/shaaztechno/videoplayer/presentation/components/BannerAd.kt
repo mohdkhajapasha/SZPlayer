@@ -9,6 +9,7 @@ import androidx.compose.ui.viewinterop.AndroidView
 import com.google.android.gms.ads.AdRequest
 import com.google.android.gms.ads.AdSize
 import com.google.android.gms.ads.AdView
+import com.shaaztechno.videoplayer.R
 
 @Composable
 fun BannerAd(modifier: Modifier = Modifier) {
@@ -19,8 +20,8 @@ fun BannerAd(modifier: Modifier = Modifier) {
         factory = { context ->
             AdView(context).apply {
                 setAdSize(AdSize.BANNER)
-                // Use standard test banner ad unit ID
-                adUnitId = "ca-app-pub-6151898268816293/6377229673"
+                // Ad unit ID is managed in build.gradle.kts via resValue
+                adUnitId = context.getString(R.string.banner_ad_unit_id)
                 loadAd(AdRequest.Builder().build())
             }
         }

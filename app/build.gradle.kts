@@ -3,6 +3,8 @@ plugins {
     alias(libs.plugins.kotlinAndroid)
     alias(libs.plugins.compose.compiler)
     alias(libs.plugins.ksp)
+    alias(libs.plugins.googleServices)
+    alias(libs.plugins.firebaseCrashlytics)
 }
 
 android {
@@ -24,11 +26,18 @@ android {
 
     buildTypes {
         release {
-            isMinifyEnabled = false
+            isMinifyEnabled = true
+            isShrinkResources = true
             proguardFiles(
                 getDefaultProguardFile("proguard-android-optimize.txt"),
                 "proguard-rules.pro"
             )
+            resValue("string", "admob_app_id", "ca-app-pub-6151898268816293~6872053696")
+            resValue("string", "banner_ad_unit_id", "ca-app-pub-6151898268816293/6377229673")
+        }
+        debug {
+            resValue("string", "admob_app_id", "ca-app-pub-3940256099942544~3347511713")
+            resValue("string", "banner_ad_unit_id", "ca-app-pub-3940256099942544/6300978111")
         }
     }
     compileOptions {
@@ -40,6 +49,7 @@ android {
     }
     buildFeatures {
         compose = true
+        resValues = true
     }
     packaging {
         resources {
@@ -86,6 +96,11 @@ dependencies {
     implementation(libs.converter.scalars)
 
     implementation(libs.play.services.ads)
+
+    // Firebase
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.analytics)
+    implementation(libs.firebase.crashlytics)
 
     testImplementation(libs.junit)
     androidTestImplementation(libs.androidx.junit)

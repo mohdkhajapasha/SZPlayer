@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "1056841629026",
+    "project_id": "szplayer-a056c",
+    "storage_bucket": "szplayer-a056c.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:1056841629026:android:8fd57b93da450b1b3c803b",
+        "android_client_info": {
+          "package_name": "com.shaaztechno.videoplayer"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyA5dwlIaRVb5f3T3eWMGcQQ1M5ftN_CrzU"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
