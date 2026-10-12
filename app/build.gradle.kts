@@ -15,8 +15,8 @@ android {
         applicationId = "com.shaaztechno.videoplayer"
         minSdk = 24
         targetSdk = 35
-        versionCode = 1
-        versionName = "1.0"
+        versionCode = 2
+        versionName = "1.1"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -34,6 +34,7 @@ android {
             )
             resValue("string", "admob_app_id", "ca-app-pub-6151898268816293~6872053696")
             resValue("string", "banner_ad_unit_id", "ca-app-pub-6151898268816293/6377229673")
+            signingConfig = signingConfigs.getByName("debug")
         }
         debug {
             resValue("string", "admob_app_id", "ca-app-pub-3940256099942544~3347511713")
@@ -50,6 +51,7 @@ android {
     buildFeatures {
         compose = true
         resValues = true
+        buildConfig = true
     }
     packaging {
         resources {
@@ -96,6 +98,7 @@ dependencies {
     implementation(libs.converter.scalars)
 
     implementation(libs.play.services.ads)
+    implementation(libs.user.messaging.platform)
 
     // Firebase
     implementation(platform(libs.firebase.bom))

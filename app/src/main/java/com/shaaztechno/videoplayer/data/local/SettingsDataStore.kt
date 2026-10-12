@@ -28,6 +28,7 @@ class SettingsDataStore(private val context: Context) {
         val VOLUME_GESTURE_ENABLED = booleanPreferencesKey("volume_gesture_enabled")
         val SEEKING_GESTURE_ENABLED = booleanPreferencesKey("seeking_gesture_enabled")
         val BACKGROUND_PLAYBACK_ENABLED = booleanPreferencesKey("background_playback_enabled")
+        val LAST_UPDATE_CHECK_TIME = longPreferencesKey("last_update_check_time")
     }
 
     val settingsFlow: Flow<UserSettings> = context.dataStore.data.map { preferences ->
@@ -42,7 +43,8 @@ class SettingsDataStore(private val context: Context) {
             brightnessGestureEnabled = preferences[BRIGHTNESS_GESTURE_ENABLED] ?: true,
             volumeGestureEnabled = preferences[VOLUME_GESTURE_ENABLED] ?: true,
             seekingGestureEnabled = preferences[SEEKING_GESTURE_ENABLED] ?: true,
-            backgroundPlaybackEnabled = preferences[BACKGROUND_PLAYBACK_ENABLED] ?: false
+            backgroundPlaybackEnabled = preferences[BACKGROUND_PLAYBACK_ENABLED] ?: false,
+            lastUpdateCheckTime = preferences[LAST_UPDATE_CHECK_TIME] ?: 0L
         )
     }
 
@@ -89,6 +91,10 @@ class SettingsDataStore(private val context: Context) {
     suspend fun updateBackgroundPlaybackEnabled(value: Boolean) {
         context.dataStore.edit { it[BACKGROUND_PLAYBACK_ENABLED] = value }
     }
+
+    suspend fun updateLastUpdateCheckTime(value: Long) {
+        context.dataStore.edit { it[LAST_UPDATE_CHECK_TIME] = value }
+    }
 }
 
 data class UserSettings(
@@ -102,5 +108,6 @@ data class UserSettings(
     val brightnessGestureEnabled: Boolean = true,
     val volumeGestureEnabled: Boolean = true,
     val seekingGestureEnabled: Boolean = true,
-    val backgroundPlaybackEnabled: Boolean = false
+    val backgroundPlaybackEnabled: Boolean = false,
+    val lastUpdateCheckTime: Long = 0L
 )

@@ -8,7 +8,7 @@ import androidx.media3.database.DatabaseProvider
 import androidx.media3.database.StandaloneDatabaseProvider
 import androidx.media3.datasource.DataSource
 import androidx.media3.datasource.DefaultDataSource
-import androidx.media3.datasource.DefaultHttpDataSource
+import androidx.media3.datasource.okhttp.OkHttpDataSource
 import androidx.media3.datasource.cache.Cache
 import androidx.media3.datasource.cache.CacheDataSource
 import androidx.media3.datasource.cache.NoOpCacheEvictor
@@ -68,11 +68,8 @@ class SZDownloadManager private constructor(
         SimpleCache(downloadDirectory, NoOpCacheEvictor(), databaseProvider)
     }
 
-    val httpDataSourceFactory: DataSource.Factory = DefaultHttpDataSource.Factory()
+    val httpDataSourceFactory: DataSource.Factory = OkHttpDataSource.Factory(okHttpClient)
         .setUserAgent("Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36")
-        .setConnectTimeoutMs(15000)
-        .setReadTimeoutMs(15000)
-        .setAllowCrossProtocolRedirects(true)
 
     val defaultDataSourceFactory: DataSource.Factory by lazy {
         DefaultDataSource.Factory(context, httpDataSourceFactory)

@@ -20,7 +20,6 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.shaaztechno.videoplayer.data.downloader.DownloadProgressItem
 import com.shaaztechno.videoplayer.domain.model.Video
-import com.shaaztechno.videoplayer.presentation.components.BannerAd
 import com.shaaztechno.videoplayer.presentation.home.VideoListItem
 import com.shaaztechno.videoplayer.ui.theme.BorderSubtle
 import com.shaaztechno.videoplayer.ui.theme.ElectricGreen
@@ -193,24 +192,11 @@ fun DownloadsScreen(
                                             }
                                         }
                                     )
-                                    
-                                    // Ad placement logic:
-                                    // after 3rd video (index == 2)
-                                    // if not 3< (i.e. size < 3), then after last video (index == lastIndex)
-                                    if (index == 2 || (uiState.completedVideos.size < 3 && index == uiState.completedVideos.lastIndex)) {
-                                        Spacer(modifier = Modifier.height(8.dp))
-                                        BannerAd()
-                                    }
                                 }
                             }
                         }
                     }
                 }
-            }
-            
-            // if 0 (i.e. completedVideos is empty), then show ad at the bottom
-            if (uiState.completedVideos.isEmpty()) {
-                BannerAd(modifier = Modifier.padding(bottom = 16.dp))
             }
         }
 

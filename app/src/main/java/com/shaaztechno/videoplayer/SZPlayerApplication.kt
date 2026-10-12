@@ -4,25 +4,35 @@ import android.app.Application
 import coil.ImageLoader
 import coil.ImageLoaderFactory
 import coil.decode.VideoFrameDecoder
-import com.google.android.gms.ads.MobileAds
 import com.shaaztechno.videoplayer.data.local.SZPlayerDatabase
 import com.shaaztechno.videoplayer.data.local.SettingsDataStore
+import com.shaaztechno.videoplayer.data.remote.GitHubUpdateDataSource
 import com.shaaztechno.videoplayer.data.remote.GoogleSheetParser
 import com.shaaztechno.videoplayer.data.repository.VideoRepositoryImpl
 import com.shaaztechno.videoplayer.data.downloader.VideoDownloader
 import com.shaaztechno.videoplayer.data.remote.InstagramMediaExtractor
 import com.shaaztechno.videoplayer.data.repository.InstagramRepositoryImpl
+import com.shaaztechno.videoplayer.data.repository.UpdateRepositoryImpl
 import com.shaaztechno.videoplayer.data.repository.VideoStorageRepositoryImpl
 import com.shaaztechno.videoplayer.domain.usecase.GetInstagramReelUseCase
 import com.shaaztechno.videoplayer.domain.repository.VideoStorageRepository
 import okhttp3.OkHttpClient
+import java.util.concurrent.TimeUnit
 
 class SZPlayerApplication : Application(), ImageLoaderFactory {
     
     val database by lazy { SZPlayerDatabase.getDatabase(this) }
     val settingsDataStore by lazy { SettingsDataStore(this) }
     
-    val httpClient by lazy { OkHttpClient() }
+    val httpClient by lazy { 
+        OkHttpClient.Builder()
+            .connectTimeout(20, TimeUnit.SECONDS)
+            .readTimeout(20, TimeUnit.SECONDS)
+            .followRedirects(true)
+            .followSslRedirects(true)
+            .build()
+    }
+    
     private val googleSheetParser by lazy { GoogleSheetParser(httpClient) }
     
     val videoRepository by lazy { 
@@ -47,11 +57,11 @@ class SZPlayerApplication : Application(), ImageLoaderFactory {
     }
 
     val videoUrlChecker by lazy {
-        com.shaaztechno.videoplayer.data.remote.VideoUrlChecker()
+        com.shaaztechno.videoplayer.data.remote.VideoUrlChecker(httpClient)
     }
 
     val videoMediaResolver by lazy {
-        com.shaaztechno.videoplayer.data.remote.VideoMediaResolver(this)
+        com.shaaztechno.videoplayer.data.remote.VideoMediaResolver(this, httpClient)
     }
 
     val videoUrlRepository by lazy {
@@ -62,6 +72,10 @@ class SZPlayerApplication : Application(), ImageLoaderFactory {
         com.shaaztechno.videoplayer.domain.usecase.CheckVideoUrlUseCase(videoUrlRepository)
     }
 
+    // Update Feature DI
+    private val gitHubUpdateDataSource by lazy { GitHubUpdateDataSource(httpClient) }
+    val updateRepository by lazy { UpdateRepositoryImpl(this, gitHubUpdateDataSource) }
+
     // Instagram Reel Feature DI
     private val instagramMediaExtractor by lazy { InstagramMediaExtractor(httpClient) }
     val instagramRepository by lazy { InstagramRepositoryImpl(instagramMediaExtractor) }
@@ -69,10 +83,7 @@ class SZPlayerApplication : Application(), ImageLoaderFactory {
 
     override fun onCreate() {
         super.onCreate()
-        // Initialize AdMob
-        try {
-            MobileAds.initialize(this) {}
-        } catch (_: Exception) {}
+        // MobileAds initialization is performed in MainActivity after UMP consent is verified
     }
 
     override fun newImageLoader(): ImageLoader {

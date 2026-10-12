@@ -9,11 +9,11 @@ import com.shaaztechno.videoplayer.data.local.entity.PlaylistEntity
 import com.shaaztechno.videoplayer.domain.model.Video
 import com.shaaztechno.videoplayer.domain.model.VideoType
 import com.shaaztechno.videoplayer.domain.repository.VideoRepository
-import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.SharingStarted
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.flow.combine
 import kotlinx.coroutines.flow.flowOf
+import kotlinx.coroutines.flow.stateIn
 import kotlinx.coroutines.launch
 
 class HomeViewModel(
@@ -21,42 +21,43 @@ class HomeViewModel(
     private val playlistDao: PlaylistDao? = null
 ) : ViewModel() {
 
-    private val _uiState = MutableStateFlow(HomeUiState())
-    val uiState: StateFlow<HomeUiState> = _uiState.asStateFlow()
+    private val playlistsFlow = playlistDao?.getAllPlaylists() ?: flowOf(emptyList())
+
+    // Uses stateIn(WhileSubscribed) — the idiomatic, lifecycle-safe way to expose a combined
+    // flow as StateFlow. Automatically stops/restarts collection with the subscriber lifecycle.
+    val uiState: StateFlow<HomeUiState> = combine(
+        repository.getVideosByType(VideoType.ONLINE),
+        repository.getVideosByType(VideoType.LOCAL),
+        repository.getPlaybackHistory(),
+        playlistsFlow
+    ) { online, local, history, playlists ->
+        val foldersMap = local.groupBy { it.folder ?: "Internal Storage" }
+        val historyMap = history.associate {
+            it.videoId to if (it.duration > 0) it.lastPosition.toFloat() / it.duration else 0f
+        }
+        HomeUiState(
+            onlineVideos = online,
+            localVideos = local,
+            recentlyPlayed = history,
+            historyMap = historyMap,
+            playlists = playlists,
+            folders = foldersMap,
+            isLoading = false
+        )
+    }.stateIn(
+        scope = viewModelScope,
+        started = SharingStarted.WhileSubscribed(5_000),
+        initialValue = HomeUiState()
+    )
 
     init {
-        viewModelScope.launch {
-            val playlistsFlow = playlistDao?.getAllPlaylists() ?: flowOf(emptyList())
-            combine(
-                repository.getVideosByType(VideoType.ONLINE),
-                repository.getVideosByType(VideoType.LOCAL),
-                repository.getPlaybackHistory(),
-                playlistsFlow
-            ) { online, local, history, playlists ->
-                val foldersMap = local.groupBy { it.folder ?: "Internal Storage" }
-                val historyMap = history.associate { it.videoId to if (it.duration > 0) it.lastPosition.toFloat() / it.duration else 0f }
-                HomeUiState(
-                    onlineVideos = online,
-                    localVideos = local,
-                    recentlyPlayed = history,
-                    historyMap = historyMap,
-                    playlists = playlists,
-                    folders = foldersMap,
-                    isLoading = false
-                )
-            }.collect {
-                _uiState.value = it
-            }
-        }
         refresh()
     }
 
     fun refresh() {
         viewModelScope.launch {
-            _uiState.value = _uiState.value.copy(isLoading = true)
             repository.refreshOnlineCatalog()
             repository.refreshLocalVideos()
-            _uiState.value = _uiState.value.copy(isLoading = false)
         }
     }
 

@@ -90,7 +90,7 @@ class PlayerActivity : ComponentActivity() {
         super.onPictureInPictureModeChanged(isInPictureInPictureMode, newConfig)
     }
 
-    fun enterPipMode() {
+    internal fun enterPipMode() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val params = PictureInPictureParams.Builder()
                 .setAspectRatio(Rational(16, 9))
@@ -99,7 +99,7 @@ class PlayerActivity : ComponentActivity() {
         }
     }
 
-    fun setFullscreen(enabled: Boolean) {
+    internal fun setFullscreen(enabled: Boolean) {
         val controller = WindowCompat.getInsetsController(window, window.decorView)
         if (enabled) {
             controller.hide(WindowInsetsCompat.Type.systemBars())
@@ -111,7 +111,7 @@ class PlayerActivity : ComponentActivity() {
         }
     }
 
-    fun shareVideo(video: Video) {
+    internal fun shareVideo(video: Video) {
         val sendIntent = Intent().apply {
             action = Intent.ACTION_SEND
             if (video.type == VideoType.ONLINE) {

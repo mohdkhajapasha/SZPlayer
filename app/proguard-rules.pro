@@ -28,6 +28,9 @@
 -keepattributes *Annotation*
 -keep class com.google.gson.** { *; }
 -keep class com.shaaztechno.videoplayer.data.remote.** { *; }
+-keep class com.shaaztechno.videoplayer.domain.model.** { *; }
+-keep class okhttp3.** { *; }
+-keep interface okhttp3.** { *; }
 -dontwarn okhttp3.**
 -dontwarn okio.**
 -dontwarn retrofit2.**
@@ -50,6 +53,8 @@
 # Media3 / ExoPlayer
 -keep class androidx.media3.** { *; }
 -dontwarn androidx.media3.**
+-keep class com.google.android.exoplayer2.** { *; }
+-dontwarn com.google.android.exoplayer2.**
 
 # Google Play Services Ads
 -keep class com.google.android.gms.ads.** { *; }

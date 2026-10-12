@@ -85,6 +85,7 @@ class VideoUrlViewModel(
                 duration = info.duration ?: 0L,
                 size = info.fileSize ?: 0L,
                 type = VideoType.ONLINE,
+                mimeType = info.mimeType,
                 dateAdded = System.currentTimeMillis()
             )
             videoRepository.addVideo(video)

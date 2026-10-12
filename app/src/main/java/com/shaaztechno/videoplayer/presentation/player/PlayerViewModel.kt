@@ -9,7 +9,6 @@ import com.shaaztechno.videoplayer.domain.repository.VideoRepository
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.launch
 
 class PlayerViewModel(
@@ -21,11 +20,14 @@ class PlayerViewModel(
     private val _uiState = MutableStateFlow(PlayerUiState())
     val uiState: StateFlow<PlayerUiState> = _uiState.asStateFlow()
 
-    private var playlist: List<Video> = emptyList()
+    // StateFlow ensures loadNextVideo always sees the latest playlist without a re-fetch race.
+    private val _playlist = MutableStateFlow<List<Video>>(emptyList())
 
     init {
         loadVideo(videoId)
-        loadPlaylist()
+        viewModelScope.launch {
+            repository.getAllVideos().collect { _playlist.value = it }
+        }
     }
 
     private fun loadVideo(id: String) {
@@ -45,14 +47,6 @@ class PlayerViewModel(
         }
     }
 
-    private fun loadPlaylist() {
-        viewModelScope.launch {
-            // In a real app, we might pass a folder ID or playlist ID.
-            // For now, we fetch all videos but cache them in the ViewModel to avoid O(N) repeated fetches.
-            playlist = repository.getAllVideos().first()
-        }
-    }
-
     fun loadNextVideo(currentPosition: Long, duration: Long) {
         val currentVideo = _uiState.value.video ?: return
         viewModelScope.launch {
@@ -62,10 +56,7 @@ class PlayerViewModel(
                 duration = duration
             )
 
-            if (playlist.isEmpty()) {
-                playlist = repository.getAllVideos().first()
-            }
-
+            val playlist = _playlist.value
             val currentIndex = playlist.indexOfFirst { it.id == currentVideo.id }
             if (currentIndex != -1 && currentIndex < playlist.size - 1) {
                 val nextVideo = playlist[currentIndex + 1]

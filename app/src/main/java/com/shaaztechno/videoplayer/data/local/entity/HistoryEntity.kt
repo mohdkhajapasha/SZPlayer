@@ -11,7 +11,8 @@ data class HistoryEntity(
     val title: String,
     val url: String,
     val type: String,
-    val thumbnailUrl: String?,
+    val mimeType: String? = null,
+    val thumbnailUrl: String? = null,
     val lastPosition: Long,
     val duration: Long,
     val timestamp: Long
@@ -23,6 +24,7 @@ data class HistoryEntity(
             url = url,
             thumbnailUrl = thumbnailUrl,
             type = try { VideoType.valueOf(type) } catch (e: Exception) { VideoType.ONLINE },
+            mimeType = mimeType,
             duration = duration,
             dateAdded = timestamp
         )

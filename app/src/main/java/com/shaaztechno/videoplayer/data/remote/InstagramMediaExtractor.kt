@@ -30,7 +30,7 @@ class InstagramMediaExtractor(private val okHttpClient: OkHttpClient) {
 
             val result = okHttpClient.newCall(request).execute().use { response ->
                 val finalUrl = response.request.url.toString()
-                
+
                 if (finalUrl.contains("accounts/login")) {
                     Log.w("InstagramExtractor", "Redirected to login page: $finalUrl")
                     return@use Result.failure(Exception("Unable to retrieve this Reel. The Reel may be private, login-protected, unavailable, or temporarily blocked by Instagram."))
@@ -41,10 +41,13 @@ class InstagramMediaExtractor(private val okHttpClient: OkHttpClient) {
                     return@use Result.failure(Exception("Unable to connect to Instagram (HTTP ${response.code})."))
                 }
 
-                val html = response.body?.string() ?: return@use Result.failure(Exception("Empty response from Instagram."))
-                
+                val html = response.body?.string()
+                    ?: return@use Result.failure(Exception("Empty response from Instagram."))
+
                 // Bot protection check
-                if (html.contains("Please wait a few minutes before you try again") || html.contains("Checking if the site connection is secure")) {
+                if (html.contains("Please wait a few minutes before you try again") ||
+                    html.contains("Checking if the site connection is secure")
+                ) {
                     return@use Result.failure(Exception("Instagram is temporarily limiting access. Please try again later."))
                 }
 
@@ -57,13 +60,17 @@ class InstagramMediaExtractor(private val okHttpClient: OkHttpClient) {
                     Result.success(
                         InstagramReel(
                             videoUrl = cleanUrl(videoUrl),
-                            thumbnailUrl = thumbnailUrl?.let { if (it.startsWith("http")) cleanUrl(it) else "" } ?: "",
+                            thumbnailUrl = thumbnailUrl?.let {
+                                if (it.startsWith("http")) cleanUrl(it) else ""
+                            } ?: "",
                             caption = caption?.let { decodeHtmlEntities(it) },
                             username = username
                         )
                     )
                 } else {
-                    if (html.contains("Login") && html.contains("Password") || html.contains("login_page")) {
+                    if ((html.contains("Login") && html.contains("Password")) ||
+                        html.contains("login_page")
+                    ) {
                         Result.failure(Exception("Unable to retrieve this Reel. The Reel may be private, login-protected, unavailable, or temporarily blocked by Instagram."))
                     } else {
                         Result.failure(Exception("Unable to retrieve media information. Public Reel format may have changed."))
@@ -82,7 +89,7 @@ class InstagramMediaExtractor(private val okHttpClient: OkHttpClient) {
         if (!normalized.startsWith("http")) {
             normalized = "https://$normalized"
         }
-        val reelIdMatch = Pattern.compile("/(reels?|p)/([a-zA-Z0-9_-]+)").matcher(normalized)
+        val reelIdMatch = REEL_ID_PATTERN.matcher(normalized)
         if (reelIdMatch.find()) {
             val type = reelIdMatch.group(1)
             val id = reelIdMatch.group(2)
@@ -100,8 +107,7 @@ class InstagramMediaExtractor(private val okHttpClient: OkHttpClient) {
             .replace("&amp;", "&")
 
         return try {
-            val pattern = Pattern.compile("\\\\u([0-9a-fA-F]{4})")
-            val matcher = pattern.matcher(cleaned)
+            val matcher = UNICODE_ESCAPE_PATTERN.matcher(cleaned)
             val sb = StringBuffer()
             while (matcher.find()) {
                 val hex = matcher.group(1) ?: continue
@@ -127,51 +133,14 @@ class InstagramMediaExtractor(private val okHttpClient: OkHttpClient) {
             .replace("\\\"", "\"")
     }
 
-    private fun extractVideoUrl(html: String): String? {
-        val patterns = listOf(
-            "\"video_url\":\"(.*?)\"",
-            "<meta property=\"og:video\" content=\"(.*?)\"",
-            "<meta property=\"og:video:secure_url\" content=\"(.*?)\"",
-            "\"contentUrl\":\"(.*?)\"",
-            "\"xdt_api__v1__media__direct_path\":\"(.*?)\"",
-            "\"video_versions\":\\[\\{[^}]*\"url\":\"(.*?)\"",
-            "\"video_url\":\\s*\"(.*?)\"",
-            "playable_url\":\"(.*?)\"",
-            "\"shortcode_media\":\\{.*?\"video_url\":\"(.*?)\"",
-            "\"base_url\":\"(.*?)\""
-        )
-        return findFirstMatch(html, patterns)
-    }
+    private fun extractVideoUrl(html: String): String? = findFirstMatch(html, VIDEO_URL_PATTERNS)
 
-    private fun extractThumbnailUrl(html: String): String? {
-        val patterns = listOf(
-            "<meta property=\"og:image\" content=\"(.*?)\"",
-            "\"display_url\":\"(.*?)\"",
-            "\"thumbnailUrl\":\"(.*?)\"",
-            "\"thumbnail_src\":\"(.*?)\"",
-            "\"thumbnail_resources\":\\[.*\"src\":\"(.*?)\"",
-            "\"display_resources\":\\[.*\"src\":\"(.*?)\""
-        )
-        return findFirstMatch(html, patterns)
-    }
+    private fun extractThumbnailUrl(html: String): String? = findFirstMatch(html, THUMBNAIL_URL_PATTERNS)
 
-    private fun extractCaption(html: String): String? {
-        val patterns = listOf(
-            "<meta property=\"og:title\" content=\"(.*?)\"",
-            "<meta name=\"description\" content=\"(.*?)\"",
-            "\"caption\":\"(.*?)\"",
-            "\"edge_media_to_caption\":\\{\"edges\":\\[\\{\"node\":\\{\"text\":\"(.*?)\""
-        )
-        return findFirstMatch(html, patterns)
-    }
+    private fun extractCaption(html: String): String? = findFirstMatch(html, CAPTION_PATTERNS)
 
     private fun extractUsername(html: String): String? {
-        val patterns = listOf(
-            "\"username\":\"(.*?)\"",
-            "\"owner\":\\{\"username\":\"(.*?)\"",
-            "og:description\" content=\"(.*?)\""
-        )
-        val match = findFirstMatch(html, patterns)
+        val match = findFirstMatch(html, USERNAME_PATTERNS)
         return if (match?.contains("on Instagram:") == true) {
             val parts = match.split(" on Instagram:")
             if (parts.isNotEmpty()) parts[0].trim() else match
@@ -180,17 +149,61 @@ class InstagramMediaExtractor(private val okHttpClient: OkHttpClient) {
         }
     }
 
-    private fun findFirstMatch(html: String, patterns: List<String>): String? {
-        for (patternStr in patterns) {
+    /**
+     * Tries each pre-compiled [Pattern] in order, returning the first non-blank group(1) match.
+     */
+    private fun findFirstMatch(html: String, patterns: List<Pattern>): String? {
+        for (pattern in patterns) {
             try {
-                val pattern = Pattern.compile(patternStr)
                 val matcher = pattern.matcher(html)
                 if (matcher.find()) {
                     val result = matcher.group(1)
                     if (!result.isNullOrBlank()) return result
                 }
-            } catch (e: Exception) {}
+            } catch (_: Exception) {}
         }
         return null
+    }
+
+    companion object {
+        // All patterns are pre-compiled once at class-load time.
+        // Previously they were compiled fresh on every extraction call inside a loop.
+        private val REEL_ID_PATTERN: Pattern = Pattern.compile("/(reels?|p)/([a-zA-Z0-9_-]+)")
+        private val UNICODE_ESCAPE_PATTERN: Pattern = Pattern.compile("\\\\u([0-9a-fA-F]{4})")
+
+        private val VIDEO_URL_PATTERNS: List<Pattern> = listOf(
+            Pattern.compile("\"video_url\":\"(.*?)\""),
+            Pattern.compile("<meta property=\"og:video\" content=\"(.*?)\""),
+            Pattern.compile("<meta property=\"og:video:secure_url\" content=\"(.*?)\""),
+            Pattern.compile("\"contentUrl\":\"(.*?)\""),
+            Pattern.compile("\"xdt_api__v1__media__direct_path\":\"(.*?)\""),
+            Pattern.compile("\"video_versions\":\\[\\{[^}]*\"url\":\"(.*?)\""),
+            Pattern.compile("\"video_url\":\\s*\"(.*?)\""),
+            Pattern.compile("playable_url\":\"(.*?)\""),
+            Pattern.compile("\"shortcode_media\":\\{.*?\"video_url\":\"(.*?)\""),
+            Pattern.compile("\"base_url\":\"(.*?)\"")
+        )
+
+        private val THUMBNAIL_URL_PATTERNS: List<Pattern> = listOf(
+            Pattern.compile("<meta property=\"og:image\" content=\"(.*?)\""),
+            Pattern.compile("\"display_url\":\"(.*?)\""),
+            Pattern.compile("\"thumbnailUrl\":\"(.*?)\""),
+            Pattern.compile("\"thumbnail_src\":\"(.*?)\""),
+            Pattern.compile("\"thumbnail_resources\":\\[.*\"src\":\"(.*?)\""),
+            Pattern.compile("\"display_resources\":\\[.*\"src\":\"(.*?)\"")
+        )
+
+        private val CAPTION_PATTERNS: List<Pattern> = listOf(
+            Pattern.compile("<meta property=\"og:title\" content=\"(.*?)\""),
+            Pattern.compile("<meta name=\"description\" content=\"(.*?)\""),
+            Pattern.compile("\"caption\":\"(.*?)\""),
+            Pattern.compile("\"edge_media_to_caption\":\\{\"edges\":\\[\\{\"node\":\\{\"text\":\"(.*?)\"")
+        )
+
+        private val USERNAME_PATTERNS: List<Pattern> = listOf(
+            Pattern.compile("\"username\":\"(.*?)\""),
+            Pattern.compile("\"owner\":\\{\"username\":\"(.*?)\""),
+            Pattern.compile("og:description\" content=\"(.*?)\"")
+        )
     }
 }

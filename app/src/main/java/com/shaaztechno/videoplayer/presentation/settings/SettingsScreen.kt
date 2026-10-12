@@ -1,6 +1,7 @@
 package com.shaaztechno.videoplayer.presentation.settings
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.CircleShape
@@ -15,11 +16,17 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import android.app.Activity
+import androidx.compose.material.icons.filled.PrivacyTip
+import com.shaaztechno.videoplayer.BuildConfig
 import com.shaaztechno.videoplayer.ui.theme.ElectricGreen
+import com.shaaztechno.videoplayer.util.ApkInstaller
+import com.shaaztechno.videoplayer.util.GoogleMobileAdsConsentManager
 import kotlinx.coroutines.launch
 
 @OptIn(ExperimentalMaterial3Api::class)
@@ -28,10 +35,64 @@ fun SettingsScreen(
     viewModel: SettingsViewModel
 ) {
     val settings by viewModel.settings.collectAsState()
+    val updateState by viewModel.updateState.collectAsState()
+    val context = LocalContext.current
+    val apkInstaller = remember { ApkInstaller(context) }
+    
     var showDeleteDialog by remember { mutableStateOf(false) }
     var showClearCatalogDialog by remember { mutableStateOf(false) }
     val snackbarHostState = remember { SnackbarHostState() }
     val scope = rememberCoroutineScope()
+
+    // Handle Update states that show Snackbars or trigger installation
+    LaunchedEffect(updateState) {
+        val state = updateState
+        when (state) {
+            is UpdateUIState.UpToDate -> {
+                if (state.isManual) {
+                    snackbarHostState.showSnackbar("You're using the latest version")
+                }
+                viewModel.resetUpdateState()
+            }
+            is UpdateUIState.Error -> {
+                snackbarHostState.showSnackbar(state.message)
+                viewModel.resetUpdateState()
+            }
+            is UpdateUIState.Downloaded -> {
+                apkInstaller.installApk(state.apkFile)
+            }
+            else -> {}
+        }
+    }
+
+    // Update Dialog Logic
+    when (val state = updateState) {
+        is UpdateUIState.UpdateAvailable -> {
+            UpdateDialog(
+                updateInfo = state.updateInfo,
+                updateState = state,
+                onDownloadClick = { viewModel.startDownload(state.updateInfo) },
+                onDismissRequest = { viewModel.resetUpdateState() }
+            )
+        }
+        is UpdateUIState.Downloading -> {
+            UpdateDialog(
+                updateInfo = state.updateInfo,
+                updateState = state,
+                onDownloadClick = { /* Already downloading */ },
+                onDismissRequest = { viewModel.resetUpdateState() }
+            )
+        }
+        is UpdateUIState.Downloaded -> {
+            UpdateDialog(
+                updateInfo = state.updateInfo,
+                updateState = state,
+                onDownloadClick = { apkInstaller.installApk(state.apkFile) },
+                onDismissRequest = { viewModel.resetUpdateState() }
+            )
+        }
+        else -> {}
+    }
 
     if (showDeleteDialog) {
         AlertDialog(
@@ -307,48 +368,6 @@ fun SettingsScreen(
                     onCheckedChange = { viewModel.updateKeepScreenAwake(it) }
                 )
 
-//                Divider(color = Color.DarkGray)
-//                Text("Appearance", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = ElectricGreen))
-//                
-//                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
-//                    Text("Dark Mode", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onBackground)
-//                    Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-//                        FilterChip(
-//                            selected = userSettings.darkMode == "light",
-//                            onClick = { viewModel.updateDarkMode("light") },
-//                            label = { Text("Light") },
-//                            colors = FilterChipDefaults.filterChipColors(
-//                                selectedContainerColor = ElectricGreen,
-//                                selectedLabelColor = MaterialTheme.colorScheme.background,
-//                                containerColor = MaterialTheme.colorScheme.surface,
-//                                labelColor = MaterialTheme.colorScheme.onSurface
-//                            )
-//                        )
-//                        FilterChip(
-//                            selected = userSettings.darkMode == "dark",
-//                            onClick = { viewModel.updateDarkMode("dark") },
-//                            label = { Text("Dark") },
-//                            colors = FilterChipDefaults.filterChipColors(
-//                                selectedContainerColor = ElectricGreen,
-//                                selectedLabelColor = MaterialTheme.colorScheme.background,
-//                                containerColor = MaterialTheme.colorScheme.surface,
-//                                labelColor = MaterialTheme.colorScheme.onSurface
-//                            )
-//                        )
-//                        FilterChip(
-//                            selected = userSettings.darkMode == "system",
-//                            onClick = { viewModel.updateDarkMode("system") },
-//                            label = { Text("System") },
-//                            colors = FilterChipDefaults.filterChipColors(
-//                                selectedContainerColor = ElectricGreen,
-//                                selectedLabelColor = MaterialTheme.colorScheme.background,
-//                                containerColor = MaterialTheme.colorScheme.surface,
-//                                labelColor = MaterialTheme.colorScheme.onSurface
-//                            )
-//                        )
-//                    }
-//                }
-
                 HorizontalDivider(color = Color.DarkGray)
                 Text("Data & History", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = ElectricGreen))
                 
@@ -356,19 +375,70 @@ fun SettingsScreen(
                     onClick = { showDeleteDialog = true },
                     modifier = Modifier.fillMaxWidth(),
                     colors = ButtonDefaults.outlinedButtonColors(contentColor = Color.Red),
-                    border = ButtonDefaults.outlinedButtonColors(contentColor = Color.Red).run { androidx.compose.foundation.BorderStroke(1.dp, Color.Red) }
+                    border = androidx.compose.foundation.BorderStroke(1.dp, Color.Red)
                 ) {
                     Icon(Icons.Default.Delete, contentDescription = null)
                     Spacer(Modifier.width(8.dp))
                     Text("Clear Playback History")
                 }
 
-
                 HorizontalDivider(color = Color.DarkGray)
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.padding(vertical = 8.dp)) {
-                    Icon(Icons.Default.Info, contentDescription = null, tint = Color.Gray)
-                    Spacer(Modifier.width(12.dp))
-                    Text("SZ Player v1.0.0", style = MaterialTheme.typography.bodyMedium, color = MaterialTheme.colorScheme.onBackground)
+                Text("About", style = MaterialTheme.typography.titleMedium.copy(fontWeight = FontWeight.Bold, color = ElectricGreen))
+
+                val activity = context as? Activity
+                val consentManager = remember { GoogleMobileAdsConsentManager.getInstance(context) }
+                if (consentManager.isPrivacyOptionsRequired && activity != null) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .clickable {
+                                consentManager.showPrivacyOptionsForm(activity) { error ->
+                                    if (error != null) {
+                                        scope.launch {
+                                            snackbarHostState.showSnackbar("Unable to open consent settings: ${error.message}")
+                                        }
+                                    }
+                                }
+                            }
+                            .padding(vertical = 8.dp)
+                    ) {
+                        Row(verticalAlignment = Alignment.CenterVertically) {
+                            Icon(Icons.Default.PrivacyTip, contentDescription = null, tint = Color.Gray)
+                            Spacer(Modifier.width(12.dp))
+                            Column {
+                                Text("Ad Privacy & Consent", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onBackground)
+                                Text("Manage your consent preferences", style = MaterialTheme.typography.bodySmall, color = Color.Gray)
+                            }
+                        }
+                    }
+                }
+
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .clickable { if (updateState !is UpdateUIState.Checking) viewModel.checkForUpdates(isManual = true) }
+                        .padding(vertical = 8.dp)
+                ) {
+                    Row(verticalAlignment = Alignment.CenterVertically) {
+                        Icon(Icons.Default.Info, contentDescription = null, tint = Color.Gray)
+                        Spacer(Modifier.width(12.dp))
+                        Column {
+                            Text("Check for Updates", style = MaterialTheme.typography.bodyLarge, color = MaterialTheme.colorScheme.onBackground)
+                            Text(
+                                text = if (updateState is UpdateUIState.Checking) "Checking for updates..." else "SZ Player v${BuildConfig.VERSION_NAME}",
+                                style = MaterialTheme.typography.bodySmall, 
+                                color = Color.Gray
+                            )
+                        }
+                        if (updateState is UpdateUIState.Checking) {
+                            Spacer(Modifier.weight(1f))
+                            CircularProgressIndicator(
+                                modifier = Modifier.size(20.dp),
+                                color = ElectricGreen,
+                                strokeWidth = 2.dp
+                            )
+                        }
+                    }
                 }
             }
         }

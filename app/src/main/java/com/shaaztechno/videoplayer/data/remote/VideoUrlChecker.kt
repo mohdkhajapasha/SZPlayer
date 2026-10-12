@@ -24,8 +24,8 @@ data class UrlCheckResponse(
 
 class VideoUrlChecker(
     private val client: OkHttpClient = OkHttpClient.Builder()
-        .connectTimeout(15, TimeUnit.SECONDS)
-        .readTimeout(15, TimeUnit.SECONDS)
+        .connectTimeout(20, TimeUnit.SECONDS)
+        .readTimeout(20, TimeUnit.SECONDS)
         .followRedirects(true)
         .followSslRedirects(true)
         .build()
@@ -59,6 +59,10 @@ class VideoUrlChecker(
         return Result.success(trimmed)
     }
 
+    /**
+     * Checks if the URL is accessible and retrieves basic metadata.
+     * Prefers GET with Range to get both headers and initial bytes in one request.
+     */
     suspend fun checkAccessibility(urlString: String): UrlCheckResponse {
         val syntaxCheck = validateUrlSyntax(urlString)
         if (syntaxCheck.isFailure) {
@@ -74,8 +78,45 @@ class VideoUrlChecker(
 
         val validUrl = syntaxCheck.getOrThrow()
 
-        // 1. Try HEAD request first
-        try {
+        // 1. Primary: GET request with byte range (bytes=0-65535)
+        val rangeResponse = try {
+            val getRequest = Request.Builder()
+                .url(validUrl)
+                .get()
+                .header("User-Agent", userAgent)
+                .header("Range", "bytes=0-65535")
+                .header("Accept", "video/*,audio/*,application/x-mpegurl,application/dash+xml,text/html,*/*;q=0.8")
+                .build()
+
+            client.newCall(getRequest).execute().use { response ->
+                if (response.isSuccessful || response.code == 206) {
+                    val contentType = response.header("Content-Type")
+                    val contentLength = parseContentLengthFromGet(response)
+                    val effectiveUrl = response.request.url.toString()
+                    val bodyBytes = readBodyBytes(response)
+
+                    UrlCheckResponse(
+                        isAccessible = true,
+                        statusCode = response.code,
+                        contentType = contentType,
+                        contentLength = contentLength,
+                        effectiveUrl = effectiveUrl,
+                        initialBytes = bodyBytes
+                    )
+                } else if (response.code == 403 || response.code == 416 || response.code == 405 || response.code == 400) {
+                    null // Fall through to full GET or HEAD
+                } else {
+                    return handleHttpError(response.code, validUrl)
+                }
+            }
+        } catch (e: Exception) {
+            null
+        }
+
+        if (rangeResponse != null) return rangeResponse
+
+        // 2. Secondary: HEAD request
+        val headResponse = try {
             val headRequest = Request.Builder()
                 .url(validUrl)
                 .head()
@@ -88,13 +129,14 @@ class VideoUrlChecker(
                     val contentLength = parseContentLength(response)
                     val effectiveUrl = response.request.url.toString()
                     
-                    val isHtml = contentType == null ||
-                            contentType.contains("text/html", ignoreCase = true) ||
-                            contentType.contains("application/xhtml", ignoreCase = true) ||
-                            !contentType.startsWith("video/", ignoreCase = true)
-                    val initialBytes = if (isHtml) fetchInitialBytes(effectiveUrl) else null
+                    // If content type is ambiguous, we MUST get bytes to identify it
+                    val isAmbiguous = contentType == null || 
+                                     contentType.contains("text/html", ignoreCase = true) ||
+                                     contentType == "application/octet-stream"
+                    
+                    val initialBytes = if (isAmbiguous) fetchInitialBytes(effectiveUrl) else null
 
-                    return UrlCheckResponse(
+                    UrlCheckResponse(
                         isAccessible = true,
                         statusCode = response.code,
                         contentType = contentType,
@@ -102,74 +144,31 @@ class VideoUrlChecker(
                         effectiveUrl = effectiveUrl,
                         initialBytes = initialBytes
                     )
-                }
-                // If HEAD returns 405 (Method Not Allowed) or 403 (Forbidden on HEAD only),
-                // fall through to range GET fallback below.
-                if (response.code != 405 && response.code != 403 && response.code != 400) {
-                    return handleHttpError(response.code, validUrl)
+                } else {
+                    null // Try full GET
                 }
             }
-        } catch (e: SSLException) {
-            return UrlCheckResponse(
-                isAccessible = false,
-                statusCode = 0,
-                contentType = null,
-                contentLength = null,
-                effectiveUrl = validUrl,
-                errorMessage = "Secure connection failed. Unable to verify SSL certificate."
-            )
-        } catch (e: UnknownHostException) {
-            return UrlCheckResponse(
-                isAccessible = false,
-                statusCode = 0,
-                contentType = null,
-                contentLength = null,
-                effectiveUrl = validUrl,
-                errorMessage = "Network connection failed. Unable to resolve server address."
-            )
-        } catch (e: SocketTimeoutException) {
-            return UrlCheckResponse(
-                isAccessible = false,
-                statusCode = 408,
-                contentType = null,
-                contentLength = null,
-                effectiveUrl = validUrl,
-                errorMessage = "Connection timed out while trying to reach the video server."
-            )
-        } catch (e: IOException) {
-            // Fall through to GET fallback in case HEAD is not supported by endpoint
+        } catch (e: Exception) {
+            null
         }
+        
+        if (headResponse != null) return headResponse
 
-        // 2. Fallback: GET request with byte range (bytes=0-65535) to fetch headers and initial magic bytes
+        // 3. Last Fallback: Full GET but only read a bit
         return try {
             val getRequest = Request.Builder()
                 .url(validUrl)
                 .get()
                 .header("User-Agent", userAgent)
-                .header("Range", "bytes=0-65535")
-                .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,video/*,*/*;q=0.8")
+                .header("Accept", "video/*,audio/*,application/x-mpegurl,application/dash+xml,text/html,*/*;q=0.8")
                 .build()
 
             client.newCall(getRequest).execute().use { response ->
-                if (response.isSuccessful || response.code == 206) {
+                if (response.isSuccessful) {
                     val contentType = response.header("Content-Type")
-                    val contentLength = parseContentLengthFromGet(response)
+                    val contentLength = parseContentLength(response)
                     val effectiveUrl = response.request.url.toString()
-                    val bodyBytes = try {
-                        response.body?.byteStream()?.use { stream ->
-                            val buf = ByteArray(65536)
-                            val out = java.io.ByteArrayOutputStream()
-                            var remaining = 65536
-                            var n = 0
-                            while (remaining > 0 && stream.read(buf, 0, minOf(buf.size, remaining)).also { n = it } != -1) {
-                                out.write(buf, 0, n)
-                                remaining -= n
-                            }
-                            out.toByteArray()
-                        }
-                    } catch (e: Exception) {
-                        null
-                    }
+                    val bodyBytes = readBodyBytes(response)
 
                     UrlCheckResponse(
                         isAccessible = true,
@@ -184,54 +183,44 @@ class VideoUrlChecker(
                 }
             }
         } catch (e: SSLException) {
-            UrlCheckResponse(
-                isAccessible = false,
-                statusCode = 0,
-                contentType = null,
-                contentLength = null,
-                effectiveUrl = validUrl,
-                errorMessage = "Secure connection failed. Unable to verify SSL certificate."
-            )
+            UrlCheckResponse(isAccessible = false, statusCode = 0, contentType = null, contentLength = null, effectiveUrl = validUrl, errorMessage = "Secure connection failed (SSL).")
         } catch (e: UnknownHostException) {
-            UrlCheckResponse(
-                isAccessible = false,
-                statusCode = 0,
-                contentType = null,
-                contentLength = null,
-                effectiveUrl = validUrl,
-                errorMessage = "Network connection failed. Unable to resolve server address."
-            )
+            UrlCheckResponse(isAccessible = false, statusCode = 0, contentType = null, contentLength = null, effectiveUrl = validUrl, errorMessage = "Network failed. Unable to resolve address.")
         } catch (e: SocketTimeoutException) {
-            UrlCheckResponse(
-                isAccessible = false,
-                statusCode = 408,
-                contentType = null,
-                contentLength = null,
-                effectiveUrl = validUrl,
-                errorMessage = "Connection timed out while trying to reach the video server."
-            )
+            UrlCheckResponse(isAccessible = false, statusCode = 408, contentType = null, contentLength = null, effectiveUrl = validUrl, errorMessage = "Connection timed out.")
         } catch (e: Exception) {
-            UrlCheckResponse(
-                isAccessible = false,
-                statusCode = 0,
-                contentType = null,
-                contentLength = null,
-                effectiveUrl = validUrl,
-                errorMessage = "Unable to access video. The URL may be invalid, expired, or private."
-            )
+            UrlCheckResponse(isAccessible = false, statusCode = 0, contentType = null, contentLength = null, effectiveUrl = validUrl, errorMessage = "Unable to access video: ${e.message}")
+        }
+    }
+
+    private fun readBodyBytes(response: Response): ByteArray? {
+        return try {
+            response.body?.byteStream()?.use { stream ->
+                val buf = ByteArray(65536)
+                val out = java.io.ByteArrayOutputStream()
+                var remaining = 65536
+                var n = 0
+                while (remaining > 0 && stream.read(buf, 0, minOf(buf.size, remaining)).also { n = it } != -1) {
+                    out.write(buf, 0, n)
+                    remaining -= n
+                }
+                out.toByteArray()
+            }
+        } catch (e: Exception) {
+            null
         }
     }
 
     private fun handleHttpError(code: Int, url: String): UrlCheckResponse {
         val message = when (code) {
-            400 -> "Invalid video request. The URL appears malformed."
+            400 -> "Invalid request. The URL appears malformed."
             401 -> "Authentication required. This video is private."
-            403 -> "Access denied. The video URL has expired, is private, or requires authorization."
-            404 -> "Video not found. The URL may be broken or the video has been removed."
-            408 -> "Server request timed out. Please try again."
-            429 -> "Too many requests. The server is rate-limiting access."
-            in 500..599 -> "Video server error ($code). The hosting server is currently unavailable."
-            else -> "Unable to access video (HTTP $code). The URL may be invalid or expired."
+            403 -> "Access denied (403). The link may have expired or is restricted."
+            404 -> "Video not found (404). The link may be broken."
+            408 -> "Request timed out."
+            429 -> "Too many requests. Please try again later."
+            in 500..599 -> "Server error ($code)."
+            else -> "Unable to access video (HTTP $code)."
         }
         return UrlCheckResponse(
             isAccessible = false,
@@ -259,28 +248,31 @@ class VideoUrlChecker(
     }
 
     private fun fetchInitialBytes(url: String): ByteArray? {
-        return try {
+        // First try with range
+        val rangeResult = try {
             val req = Request.Builder()
                 .url(url)
                 .get()
                 .header("User-Agent", userAgent)
                 .header("Range", "bytes=0-65535")
-                .header("Accept", "text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8")
                 .build()
             client.newCall(req).execute().use { response ->
-                if (response.isSuccessful || response.code == 206) {
-                    response.body?.byteStream()?.use { stream ->
-                        val buf = ByteArray(65536)
-                        val out = java.io.ByteArrayOutputStream()
-                        var remaining = 65536
-                        var n = 0
-                        while (remaining > 0 && stream.read(buf, 0, minOf(buf.size, remaining)).also { n = it } != -1) {
-                            out.write(buf, 0, n)
-                            remaining -= n
-                        }
-                        out.toByteArray()
-                    }
-                } else null
+                if (response.isSuccessful || response.code == 206) readBodyBytes(response) else null
+            }
+        } catch (e: Exception) {
+            null
+        }
+        if (rangeResult != null) return rangeResult
+
+        // Try without range
+        return try {
+            val req = Request.Builder()
+                .url(url)
+                .get()
+                .header("User-Agent", userAgent)
+                .build()
+            client.newCall(req).execute().use { response ->
+                if (response.isSuccessful) readBodyBytes(response) else null
             }
         } catch (e: Exception) {
             null

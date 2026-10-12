@@ -4,6 +4,8 @@ import android.content.Context
 import androidx.room.Database
 import androidx.room.Room
 import androidx.room.RoomDatabase
+import androidx.room.migration.Migration
+import androidx.sqlite.db.SupportSQLiteDatabase
 import com.shaaztechno.videoplayer.data.local.dao.HistoryDao
 import com.shaaztechno.videoplayer.data.local.dao.PlaylistDao
 import com.shaaztechno.videoplayer.data.local.dao.VideoDao
@@ -19,7 +21,7 @@ import com.shaaztechno.videoplayer.data.local.entity.VideoEntity
         PlaylistEntity::class,
         PlaylistItemEntity::class
     ],
-    version = 2,
+    version = 3,
     exportSchema = false
 )
 abstract class SZPlayerDatabase : RoomDatabase() {
@@ -31,6 +33,37 @@ abstract class SZPlayerDatabase : RoomDatabase() {
         @Volatile
         private var INSTANCE: SZPlayerDatabase? = null
 
+        val MIGRATION_2_3 = object : Migration(2, 3) {
+            override fun migrate(db: SupportSQLiteDatabase) {
+                addColumnIfNotExists(db, "playback_history", "mimeType", "TEXT")
+                addColumnIfNotExists(db, "videos", "mimeType", "TEXT")
+            }
+        }
+
+        private fun addColumnIfNotExists(
+            db: SupportSQLiteDatabase,
+            tableName: String,
+            columnName: String,
+            columnType: String
+        ) {
+            val cursor = db.query("PRAGMA table_info(`$tableName`)")
+            var exists = false
+            cursor.use {
+                val nameIndex = it.getColumnIndex("name")
+                if (nameIndex != -1) {
+                    while (it.moveToNext()) {
+                        if (it.getString(nameIndex).equals(columnName, ignoreCase = true)) {
+                            exists = true
+                            break
+                        }
+                    }
+                }
+            }
+            if (!exists) {
+                db.execSQL("ALTER TABLE `$tableName` ADD COLUMN `$columnName` $columnType")
+            }
+        }
+
         fun getDatabase(context: Context): SZPlayerDatabase {
             return INSTANCE ?: synchronized(this) {
                 val instance = Room.databaseBuilder(
@@ -38,6 +71,7 @@ abstract class SZPlayerDatabase : RoomDatabase() {
                     SZPlayerDatabase::class.java,
                     "sz_player_database"
                 )
+                .addMigrations(MIGRATION_2_3)
                 .fallbackToDestructiveMigration()
                 .build()
                 INSTANCE = instance

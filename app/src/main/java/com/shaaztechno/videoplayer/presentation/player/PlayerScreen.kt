@@ -61,8 +61,10 @@ import androidx.media3.ui.AspectRatioFrameLayout
 import androidx.media3.ui.PlayerView
 import com.shaaztechno.videoplayer.SZPlayerApplication
 import com.shaaztechno.videoplayer.domain.model.Video
+import com.shaaztechno.videoplayer.domain.model.VideoType
 import com.shaaztechno.videoplayer.service.player.VideoPlaybackService
 import com.shaaztechno.videoplayer.ui.theme.ElectricGreen
+import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.math.abs
@@ -261,7 +263,7 @@ fun PlayerScreen(
             val mediaItem = MediaItem.Builder()
                 .setMediaId(video.id)
                 .setUri(playUri)
-                .setMimeType(if (video.type == com.shaaztechno.videoplayer.domain.model.VideoType.ONLINE) null else "video/*")
+                .setMimeType(video.mimeType ?: (if (video.type == com.shaaztechno.videoplayer.domain.model.VideoType.ONLINE) null else "video/*"))
                 .build()
             
             player.trackSelectionParameters = player.trackSelectionParameters
@@ -288,101 +290,110 @@ fun PlayerScreen(
         modifier = Modifier
             .fillMaxSize()
             .background(Color.Black)
+            // Single pointerInput block handles both taps and drags to avoid competing gesture
+            // detectors fighting over the same pointer events (identical keys = one wins randomly).
             .pointerInput(isLocked, settings, mediaController) {
-                detectTapGestures(
-                    onTap = { showControls = !showControls },
-                    onDoubleTap = { offset ->
-                        val player = mediaController ?: return@detectTapGestures
-                        if (isLocked || settings?.seekingGestureEnabled == false) return@detectTapGestures
-                        val width = size.width
-                        if (offset.x < width / 2) {
-                            player.seekBack()
-                            gestureText = "-10s"
-                            gestureIcon = Icons.Rounded.Replay10
-                        } else {
-                            player.seekForward()
-                            gestureText = "+10s"
-                            gestureIcon = Icons.Rounded.Forward10
-                        }
-                        scope.launch {
-                            delay(1000)
-                            gestureText = null
-                            gestureIcon = null
-                        }
-                    },
-                    onLongPress = {
-                        if (isLocked) return@detectTapGestures
-                        playbackSpeed = 2.0f
-                        gestureText = "2x Speed"
-                        gestureIcon = Icons.Rounded.FastForward
-                    },
-                    onPress = {
-                        if (isLocked) return@detectTapGestures
-                        tryAwaitRelease()
-                        if (playbackSpeed == 2.0f) {
-                            playbackSpeed = 1.0f
-                            gestureText = null
-                            gestureIcon = null
-                        }
+                coroutineScope {
+                    // Tap / double-tap / long-press gestures
+                    launch {
+                        detectTapGestures(
+                            onTap = { showControls = !showControls },
+                            onDoubleTap = { offset ->
+                                val player = mediaController ?: return@detectTapGestures
+                                if (isLocked || settings?.seekingGestureEnabled == false) return@detectTapGestures
+                                val width = size.width
+                                if (offset.x < width / 2) {
+                                    player.seekBack()
+                                    gestureText = "-10s"
+                                    gestureIcon = Icons.Rounded.Replay10
+                                } else {
+                                    player.seekForward()
+                                    gestureText = "+10s"
+                                    gestureIcon = Icons.Rounded.Forward10
+                                }
+                                scope.launch {
+                                    delay(1000)
+                                    gestureText = null
+                                    gestureIcon = null
+                                }
+                            },
+                            onLongPress = {
+                                if (isLocked) return@detectTapGestures
+                                playbackSpeed = 2.0f
+                                gestureText = "2x Speed"
+                                gestureIcon = Icons.Rounded.FastForward
+                            },
+                            onPress = {
+                                if (isLocked) return@detectTapGestures
+                                tryAwaitRelease()
+                                if (playbackSpeed == 2.0f) {
+                                    playbackSpeed = 1.0f
+                                    gestureText = null
+                                    gestureIcon = null
+                                }
+                            }
+                        )
                     }
-                )
-            }
-            .pointerInput(isLocked, settings, mediaController) {
-                if (isLocked) return@pointerInput
-                detectDragGestures(
-                    onDrag = { change, dragAmount ->
-                        val player = mediaController ?: return@detectDragGestures
-                        val width = size.width
-                        val height = size.height
-                        
-                        if (abs(dragAmount.y) > abs(dragAmount.x)) {
-                            if (change.position.x < width / 2) {
-                                if (settings?.brightnessGestureEnabled != false) {
-                                    activity?.window?.let { window ->
-                                        val lp = window.attributes
-                                        val currentBrightness = if (lp.screenBrightness < 0) 0.5f else lp.screenBrightness
-                                        lp.screenBrightness = (currentBrightness - dragAmount.y / height).coerceIn(0f, 1f)
-                                        window.attributes = lp
-                                        gestureText = "Brightness: ${(lp.screenBrightness * 100).toInt()}%"
-                                        gestureIcon = when {
-                                            lp.screenBrightness > 0.7f -> Icons.Rounded.BrightnessHigh
-                                            lp.screenBrightness > 0.3f -> Icons.Rounded.BrightnessMedium
-                                            else -> Icons.Rounded.BrightnessLow
+
+                    // Drag gestures (brightness / volume / seek)
+                    launch {
+                        if (isLocked) return@launch
+                        detectDragGestures(
+                            onDrag = { change, dragAmount ->
+                                val player = mediaController ?: return@detectDragGestures
+                                val width = size.width
+                                val height = size.height
+
+                                if (abs(dragAmount.y) > abs(dragAmount.x)) {
+                                    if (change.position.x < width / 2) {
+                                        if (settings?.brightnessGestureEnabled != false) {
+                                            activity?.window?.let { window ->
+                                                val lp = window.attributes
+                                                val currentBrightness = if (lp.screenBrightness < 0) 0.5f else lp.screenBrightness
+                                                lp.screenBrightness = (currentBrightness - dragAmount.y / height).coerceIn(0f, 1f)
+                                                window.attributes = lp
+                                                gestureText = "Brightness: ${(lp.screenBrightness * 100).toInt()}%"
+                                                gestureIcon = when {
+                                                    lp.screenBrightness > 0.7f -> Icons.Rounded.BrightnessHigh
+                                                    lp.screenBrightness > 0.3f -> Icons.Rounded.BrightnessMedium
+                                                    else -> Icons.Rounded.BrightnessLow
+                                                }
+                                            }
+                                        }
+                                    } else {
+                                        if (settings?.volumeGestureEnabled != false) {
+                                            val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
+                                            if (volumeAccumulator < 0f) {
+                                                volumeAccumulator = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat()
+                                            }
+                                            volumeAccumulator = (volumeAccumulator - dragAmount.y / height * maxVolume).coerceIn(0f, maxVolume.toFloat())
+                                            val nextVolume = volumeAccumulator.toInt()
+                                            audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, nextVolume, 0)
+                                            gestureText = "Volume: ${(volumeAccumulator / maxVolume * 100).toInt()}%"
+                                            gestureIcon = if (nextVolume == 0) Icons.AutoMirrored.Rounded.VolumeOff else Icons.AutoMirrored.Rounded.VolumeUp
                                         }
                                     }
-                                }
-                            } else {
-                                if (settings?.volumeGestureEnabled != false) {
-                                    val maxVolume = audioManager.getStreamMaxVolume(AudioManager.STREAM_MUSIC)
-                                    if (volumeAccumulator < 0f) {
-                                        volumeAccumulator = audioManager.getStreamVolume(AudioManager.STREAM_MUSIC).toFloat()
+                                } else {
+                                    if (settings?.seekingGestureEnabled != false) {
+                                        val dragProgress = dragAmount.x / width
+                                        val seekDelta = (dragProgress * 60000).toLong()
+                                        player.seekTo((player.currentPosition + seekDelta).coerceIn(0, player.duration))
+                                        gestureText = formatTime(player.currentPosition)
+                                        gestureIcon = if (dragAmount.x > 0) Icons.Rounded.FastForward else Icons.Rounded.FastRewind
                                     }
-                                    volumeAccumulator = (volumeAccumulator - dragAmount.y / height * maxVolume).coerceIn(0f, maxVolume.toFloat())
-                                    val nextVolume = volumeAccumulator.toInt()
-                                    audioManager.setStreamVolume(AudioManager.STREAM_MUSIC, nextVolume, 0)
-                                    gestureText = "Volume: ${(volumeAccumulator / maxVolume * 100).toInt()}%"
-                                    gestureIcon = if (nextVolume == 0) Icons.AutoMirrored.Rounded.VolumeOff else Icons.AutoMirrored.Rounded.VolumeUp
+                                }
+                            },
+                            onDragEnd = {
+                                volumeAccumulator = -1f
+                                scope.launch {
+                                    delay(1000)
+                                    gestureText = null
+                                    gestureIcon = null
                                 }
                             }
-                        } else {
-                            if (settings?.seekingGestureEnabled != false) {
-                                val dragProgress = dragAmount.x / width
-                                val seekDelta = (dragProgress * 60000).toLong()
-                                player.seekTo((player.currentPosition + seekDelta).coerceIn(0, player.duration))
-                                gestureText = formatTime(player.currentPosition)
-                                gestureIcon = if (dragAmount.x > 0) Icons.Rounded.FastForward else Icons.Rounded.FastRewind
-                            }
-                        }
-                    },
-                    onDragEnd = {
-                        volumeAccumulator = -1f
-                        scope.launch {
-                            delay(1000)
-                            gestureText = null
-                            gestureIcon = null
-                        }
+                        )
                     }
-                )
+                }
             }
     ) {
         if (uiState.isLoading || mediaController == null) {
@@ -446,7 +457,7 @@ fun PlayerScreen(
                     onDeleteClick = { showDeleteDialog = true },
                     onDownloadClick = {
                         uiState.video?.let { video ->
-                            if (video.type == com.shaaztechno.videoplayer.domain.model.VideoType.ONLINE) {
+                            if (video.type == VideoType.ONLINE) {
                                 app.szDownloadManager.startDownload(video.id, video.url, video.title, null)
                                 Toast.makeText(context, "Download started", Toast.LENGTH_SHORT).show()
                             }
@@ -503,7 +514,7 @@ fun PlayerScreen(
                 }
             }
 
-            if (isBuffering && uiState.video?.type == com.shaaztechno.videoplayer.domain.model.VideoType.ONLINE) {
+            if (isBuffering && uiState.video?.type == VideoType.ONLINE) {
                 Column(
                     modifier = Modifier.align(Alignment.Center),
                     horizontalAlignment = Alignment.CenterHorizontally
@@ -584,7 +595,6 @@ fun PlayerControls(
     isFullscreen: Boolean = true,
     onFullscreenClick: () -> Unit = {},
     onRotationClick: () -> Unit = {},
-    @Suppress("UNUSED_PARAMETER") isPortrait: Boolean = true,
     isDraggingSlider: Boolean,
     onDraggingSliderChange: (Boolean) -> Unit,
     sliderDraggedValue: Float,
@@ -791,12 +801,14 @@ fun PlayerControls(
 
                     LaunchedEffect(player, isDraggingSlider) {
                         while (true) {
-                            if (!isDraggingSlider) {
+                            // Only update position when actively playing to save CPU/battery.
+                            if (!isDraggingSlider && player.isPlaying) {
                                 position = player.currentPosition
                             }
                             duration = player.duration
                             bufferedPosition = player.bufferedPosition
-                            delay(400)
+                            // Poll more slowly when paused — position won't change anyway.
+                            delay(if (player.isPlaying) 400L else 1_000L)
                         }
                     }
 

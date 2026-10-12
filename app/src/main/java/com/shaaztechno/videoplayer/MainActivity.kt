@@ -65,16 +65,37 @@ import com.shaaztechno.videoplayer.presentation.search.SearchScreen
 import com.shaaztechno.videoplayer.presentation.search.SearchViewModel
 import com.shaaztechno.videoplayer.presentation.settings.SettingsScreen
 import com.shaaztechno.videoplayer.presentation.settings.SettingsViewModel
+import com.shaaztechno.videoplayer.presentation.settings.UpdateDialog
+import com.shaaztechno.videoplayer.presentation.settings.UpdateUIState
 import com.shaaztechno.videoplayer.presentation.splash.SplashScreen
 import com.shaaztechno.videoplayer.presentation.videourl.VideoUrlScreen
 import com.shaaztechno.videoplayer.presentation.videourl.VideoUrlViewModel
 import com.shaaztechno.videoplayer.ui.theme.SZPlayerTheme
+import com.shaaztechno.videoplayer.util.ApkInstaller
+import com.google.android.gms.ads.MobileAds
+import com.shaaztechno.videoplayer.util.GoogleMobileAdsConsentManager
+import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import java.io.File
+import java.util.concurrent.atomic.AtomicBoolean
 
 class MainActivity : ComponentActivity() {
 
     private val isInPipMode = mutableStateOf(false)
+    private val isMobileAdsInitialized = AtomicBoolean(false)
+
+    private fun initializeMobileAdsSdk() {
+        if (isMobileAdsInitialized.getAndSet(true)) {
+            return
+        }
+        lifecycleScope.launch(Dispatchers.IO) {
+            try {
+                MobileAds.initialize(this@MainActivity) {}
+            } catch (e: Exception) {
+                Log.e("MainActivity", "Failed to initialize MobileAds SDK", e)
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
@@ -83,6 +104,21 @@ class MainActivity : ComponentActivity() {
         WindowCompat.setDecorFitsSystemWindows(window, false)
         
         val app = applicationContext as SZPlayerApplication
+
+        // Gather consent using Google UMP SDK before initializing ads
+        val consentManager = GoogleMobileAdsConsentManager.getInstance(this)
+        consentManager.gatherConsent(this) { consentError ->
+            if (consentError != null) {
+                Log.w("MainActivity", "Consent gathering failed: ${consentError.message}")
+            }
+            if (consentManager.canRequestAds) {
+                initializeMobileAdsSdk()
+            }
+        }
+
+        if (consentManager.canRequestAds) {
+            initializeMobileAdsSdk()
+        }
 
         // Handle intent on initial creation
         handleIntent(intent)
@@ -198,6 +234,62 @@ fun MainScreen(isInPipMode: Boolean) {
     val context = LocalContext.current
     val activity = context as? MainActivity
 
+    val app = context.applicationContext as SZPlayerApplication
+    
+    // Shared ViewModel for updates, scoped to the Activity to ensure state persistence and global access
+    val updateViewModel: SettingsViewModel = viewModel(
+        viewModelStoreOwner = context as ComponentActivity,
+        factory = SettingsViewModel.Factory(
+            app.settingsDataStore,
+            app.videoRepository,
+            app.updateRepository
+        )
+    )
+    val updateState by updateViewModel.updateState.collectAsState()
+    val apkInstaller = remember { ApkInstaller(context) }
+
+    // Automatic update check on app launch
+    LaunchedEffect(Unit) {
+        updateViewModel.checkForUpdates(isManual = false)
+    }
+
+    // Auto-install logic when download completes
+    LaunchedEffect(updateState) {
+        val state = updateState
+        if (state is UpdateUIState.Downloaded) {
+            apkInstaller.installApk(state.apkFile)
+        }
+    }
+
+    // Global Update Dialog shown over any screen
+    when (val state = updateState) {
+        is UpdateUIState.UpdateAvailable -> {
+            UpdateDialog(
+                updateInfo = state.updateInfo,
+                updateState = state,
+                onDownloadClick = { updateViewModel.startDownload(state.updateInfo) },
+                onDismissRequest = { updateViewModel.resetUpdateState() }
+            )
+        }
+        is UpdateUIState.Downloading -> {
+            UpdateDialog(
+                updateInfo = state.updateInfo,
+                updateState = state,
+                onDownloadClick = { /* Already downloading */ },
+                onDismissRequest = { updateViewModel.resetUpdateState() }
+            )
+        }
+        is UpdateUIState.Downloaded -> {
+            UpdateDialog(
+                updateInfo = state.updateInfo,
+                updateState = state,
+                onDownloadClick = { apkInstaller.installApk(state.apkFile) },
+                onDismissRequest = { updateViewModel.resetUpdateState() }
+            )
+        }
+        else -> {}
+    }
+
     val items = listOf(
         BottomNavItem(Screen.Home, Icons.Default.Home, "Home"),
         BottomNavItem(Screen.Library, Icons.Default.Folder, "Library"),
@@ -288,7 +380,6 @@ fun MainScreen(isInPipMode: Boolean) {
                 popEnterTransition = { fadeIn(animationSpec = tween(220)) },
                 popExitTransition = { fadeOut(animationSpec = tween(220)) }
             ) {
-                val app = context.applicationContext as SZPlayerApplication
                 val viewModel: HomeViewModel = viewModel(factory = HomeViewModel.Factory(app.videoRepository, app.database.playlistDao()))
                 HomeScreen(
                     viewModel = viewModel, 
@@ -355,7 +446,6 @@ fun MainScreen(isInPipMode: Boolean) {
                 )
             ) { backStackEntry ->
                 val folderName = backStackEntry.arguments?.getString("folderName") ?: return@composable
-                val app = context.applicationContext as SZPlayerApplication
                 val viewModel: FolderVideosViewModel = viewModel(
                     factory = FolderVideosViewModel.Factory(folderName, app.videoRepository, app.database.playlistDao())
                 )
@@ -372,7 +462,6 @@ fun MainScreen(isInPipMode: Boolean) {
                 )
             }
             composable(Screen.ContinueWatching.route) {
-                val app = context.applicationContext as SZPlayerApplication
                 val viewModel: HomeViewModel = viewModel(factory = HomeViewModel.Factory(app.videoRepository, app.database.playlistDao()))
                 ContinueWatchingScreen(
                     viewModel = viewModel,
@@ -394,7 +483,6 @@ fun MainScreen(isInPipMode: Boolean) {
                 popEnterTransition = { fadeIn(animationSpec = tween(220)) },
                 popExitTransition = { fadeOut(animationSpec = tween(220)) }
             ) {
-                val app = context.applicationContext as SZPlayerApplication
                 val viewModel: LibraryViewModel = viewModel(factory = LibraryViewModel.Factory(app.videoRepository, app.database.playlistDao()))
                 LibraryScreen(
                     viewModel = viewModel, 
@@ -416,7 +504,6 @@ fun MainScreen(isInPipMode: Boolean) {
                 popEnterTransition = { fadeIn(animationSpec = tween(220)) },
                 popExitTransition = { fadeOut(animationSpec = tween(220)) }
             ) {
-                val app = context.applicationContext as SZPlayerApplication
                 val viewModel: DownloadsViewModel = viewModel(
                     factory = DownloadsViewModel.Factory(app.videoRepository, app.szDownloadManager)
                 )
@@ -437,7 +524,6 @@ fun MainScreen(isInPipMode: Boolean) {
                 popEnterTransition = { fadeIn(animationSpec = tween(220)) },
                 popExitTransition = { fadeOut(animationSpec = tween(220)) }
             ) {
-                val app = context.applicationContext as SZPlayerApplication
                 val viewModel: PlaylistViewModel = viewModel(factory = PlaylistViewModel.Factory(app.database.playlistDao(), app.videoRepository))
                 PlaylistScreen(viewModel, onPlaylistClick = { playlist ->
                     navController.navigate(Screen.PlaylistDetail.createRoute(playlist.id, playlist.name))
@@ -452,7 +538,6 @@ fun MainScreen(isInPipMode: Boolean) {
             ) { backStackEntry ->
                 val playlistId = backStackEntry.arguments?.getLong("playlistId") ?: return@composable
                 val playlistName = backStackEntry.arguments?.getString("playlistName") ?: ""
-                val app = context.applicationContext as SZPlayerApplication
                 val viewModel: PlaylistDetailViewModel = viewModel(
                     factory = PlaylistDetailViewModel.Factory(playlistId, app.database.playlistDao())
                 )
@@ -475,12 +560,9 @@ fun MainScreen(isInPipMode: Boolean) {
                 popEnterTransition = { fadeIn(animationSpec = tween(220)) },
                 popExitTransition = { fadeOut(animationSpec = tween(220)) }
             ) {
-                val app = context.applicationContext as SZPlayerApplication
-                val viewModel: SettingsViewModel = viewModel(factory = SettingsViewModel.Factory(app.settingsDataStore, app.videoRepository))
-                SettingsScreen(viewModel)
+                SettingsScreen(updateViewModel)
             }
             composable(Screen.AddVideo.route) {
-                val app = context.applicationContext as SZPlayerApplication
                 val viewModel: AddVideoViewModel = viewModel(factory = AddVideoViewModel.Factory(app.videoRepository))
                 AddVideoScreen(
                     viewModel = viewModel,
@@ -499,7 +581,6 @@ fun MainScreen(isInPipMode: Boolean) {
                 )
             }
             composable(Screen.VideoUrl.route) {
-                val app = context.applicationContext as SZPlayerApplication
                 val viewModel: VideoUrlViewModel = viewModel(
                     factory = VideoUrlViewModel.Factory(
                         app.checkVideoUrlUseCase,
@@ -525,7 +606,6 @@ fun MainScreen(isInPipMode: Boolean) {
                 )
             }
             composable(Screen.Instagram.route) {
-                val app = context.applicationContext as SZPlayerApplication
                 val viewModel: InstagramViewModel = viewModel(
                     factory = InstagramViewModel.Factory(
                         app.getInstagramReelUseCase,
@@ -541,7 +621,6 @@ fun MainScreen(isInPipMode: Boolean) {
                 )
             }
             composable(Screen.Search.route) {
-                val app = context.applicationContext as SZPlayerApplication
                 val viewModel: SearchViewModel = viewModel(factory = SearchViewModel.Factory(app.videoRepository))
                 SearchScreen(
                     viewModel = viewModel,

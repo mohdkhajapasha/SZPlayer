@@ -20,6 +20,8 @@ class VideoMediaResolver(
     private val httpClient: OkHttpClient = OkHttpClient()
 ) {
 
+    private val userAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+
     fun resolveMediaInfo(
         originalUrl: String,
         checkResponse: UrlCheckResponse
@@ -51,25 +53,15 @@ class VideoMediaResolver(
             thumbnailUrl = extractVideoFrameThumbnail(effectiveUrl)
         }
 
-        // 4. Verify Media3 can create a media source
-        val uri = Uri.parse(effectiveUrl)
-        val mediaItemBuilder = MediaItem.Builder().setUri(uri)
-        if (mimeType != null) {
-            mediaItemBuilder.setMimeType(mimeType)
-        }
-        val mediaItem = mediaItemBuilder.build()
-
-        val isPlayable = try {
-            val factory = DefaultMediaSourceFactory(context)
-            factory.createMediaSource(mediaItem)
-            true
-        } catch (e: Exception) {
-            false
-        }
+        // 4. Verification
+        // If we detected a valid media type or mimeType, we consider it playable.
+        // We use MimeTypes.VIDEO_MP4 as a generic hint for progressive streams if unknown.
+        val resolvedMimeType = mimeType ?: if (mediaType != "HTML") MimeTypes.VIDEO_MP4 else null
+        val isPlayable = resolvedMimeType != null
 
         if (!isPlayable) {
             return Result.failure(
-                IllegalArgumentException("SZ Player could not initialize playback for this media stream.")
+                IllegalArgumentException("SZ Player could not recognize a playable video stream at this URL.")
             )
         }
 
@@ -88,7 +80,7 @@ class VideoMediaResolver(
                 url = effectiveUrl,
                 title = title,
                 mediaType = mediaType,
-                mimeType = mimeType,
+                mimeType = resolvedMimeType,
                 thumbnailUrl = thumbnailUrl,
                 sourceName = sourceName,
                 authorName = authorName,
@@ -106,52 +98,71 @@ class VideoMediaResolver(
         initialBytes: ByteArray?
     ): Pair<String?, String?> {
         val lowerUrl = url.lowercase(Locale.ROOT).substringBefore('?')
+        val pureMime = contentType?.substringBefore(';')?.trim()
 
-        if (contentType != null) {
+        // 1. Explicit Video MIME types from headers
+        if (pureMime != null) {
             when {
-                contentType.contains("video/mp4") || contentType.contains("application/mp4") ->
+                pureMime.contains("video/mp4") || pureMime.contains("application/mp4") ->
                     return "MP4" to MimeTypes.VIDEO_MP4
-                contentType.contains("video/webm") ->
+                pureMime.contains("video/webm") ->
                     return "WebM" to MimeTypes.VIDEO_WEBM
-                contentType.contains("video/x-matroska") || contentType.contains("video/mkv") ->
+                pureMime.contains("video/x-matroska") || pureMime.contains("video/mkv") ->
                     return "MKV" to MimeTypes.VIDEO_MATROSKA
-                contentType.contains("application/x-mpegurl") ||
-                contentType.contains("application/vnd.apple.mpegurl") ||
-                contentType.contains("audio/mpegurl") ->
+                pureMime.contains("application/x-mpegurl") ||
+                pureMime.contains("application/vnd.apple.mpegurl") ||
+                pureMime.contains("audio/mpegurl") ->
                     return "HLS Stream" to MimeTypes.APPLICATION_M3U8
-                contentType.contains("application/dash+xml") ->
+                pureMime.contains("application/dash+xml") ->
                     return "DASH Stream" to MimeTypes.APPLICATION_MPD
-                contentType.contains("video/quicktime") ->
+                pureMime.contains("video/quicktime") ->
                     return "QuickTime MOV" to MimeTypes.VIDEO_MP4
-                contentType.contains("video/3gpp") ->
+                pureMime.contains("video/3gpp") ->
                     return "3GP" to MimeTypes.VIDEO_H263
-                contentType.startsWith("video/") ->
-                    return "Video" to null
+                pureMime.startsWith("video/") ->
+                    return "Video" to pureMime
             }
         }
 
-        if (initialBytes != null && initialBytes.isNotEmpty()) {
-            val textPrefix = try {
-                String(initialBytes.take(256).toByteArray(), Charsets.UTF_8)
-            } catch (e: Exception) { "" }
+        // 2. Extension check (High confidence)
+        val extensionMatch = when {
+            lowerUrl.endsWith(".mp4") || lowerUrl.endsWith(".m4v") -> "MP4" to MimeTypes.VIDEO_MP4
+            lowerUrl.endsWith(".m3u8") -> "HLS Stream" to MimeTypes.APPLICATION_M3U8
+            lowerUrl.endsWith(".mpd") -> "DASH Stream" to MimeTypes.APPLICATION_MPD
+            lowerUrl.endsWith(".webm") -> "WebM" to MimeTypes.VIDEO_WEBM
+            lowerUrl.endsWith(".mkv") -> "MKV" to MimeTypes.VIDEO_MATROSKA
+            lowerUrl.endsWith(".mov") -> "QuickTime MOV" to MimeTypes.VIDEO_MP4
+            lowerUrl.endsWith(".3gp") -> "3GP" to MimeTypes.VIDEO_H263
+            lowerUrl.endsWith(".ts") -> "MPEG-TS" to MimeTypes.VIDEO_MP2T
+            else -> null
+        }
+        if (extensionMatch != null) return extensionMatch
 
+        // 3. Content Sniffing (Magic Bytes)
+        if (initialBytes != null && initialBytes.size >= 4) {
+            val hexPrefix = initialBytes.take(8).joinToString("") { "%02x".format(it) }
+            
+            // MP4 (ftyp)
+            if (hexPrefix.contains("66747970")) return "MP4" to MimeTypes.VIDEO_MP4
+            
+            // Matroska / WebM (EBML)
+            if (hexPrefix.startsWith("1a45dfa3")) return "Video" to MimeTypes.VIDEO_WEBM
+            
+            // MPEG-TS (Sync byte 0x47)
+            if (initialBytes[0] == 0x47.toByte()) return "MPEG-TS" to MimeTypes.VIDEO_MP2T
+
+            // HLS / M3U8
+            val textPrefix = try { String(initialBytes.take(512).toByteArray(), Charsets.UTF_8) } catch (e: Exception) { "" }
             if (textPrefix.startsWith("#EXTM3U", false)) return "HLS Stream" to MimeTypes.APPLICATION_M3U8
             if (textPrefix.contains("<MPD") || textPrefix.contains("urn:mpeg:dash")) return "DASH Stream" to MimeTypes.APPLICATION_MPD
 
-            if (initialBytes.size >= 8) {
-                val boxType = String(initialBytes.sliceArray(4..7), Charsets.US_ASCII)
-                if (boxType.lowercase(Locale.ROOT) == "ftyp") return "MP4" to MimeTypes.VIDEO_MP4
+            // Ambiguous binary streams (e.g. googleusercontent download links)
+            if (pureMime == "application/octet-stream" || pureMime == null) {
+                // If it's not HTML or XML, assume it's a video stream (Progressive)
+                if (!textPrefix.trimStart().startsWith("<") && !textPrefix.contains("<!DOCTYPE", true)) {
+                    return "Online Video" to MimeTypes.VIDEO_MP4 // Hint for ExoPlayer to attempt progressive playback
+                }
             }
-        }
-
-        when {
-            lowerUrl.endsWith(".mp4") -> return "MP4" to MimeTypes.VIDEO_MP4
-            lowerUrl.endsWith(".m3u8") -> return "HLS Stream" to MimeTypes.APPLICATION_M3U8
-            lowerUrl.endsWith(".mpd") -> return "DASH Stream" to MimeTypes.APPLICATION_MPD
-            lowerUrl.endsWith(".webm") -> return "WebM" to MimeTypes.VIDEO_WEBM
-            lowerUrl.endsWith(".mkv") -> return "MKV" to MimeTypes.VIDEO_MATROSKA
-            lowerUrl.endsWith(".mov") -> return "QuickTime MOV" to MimeTypes.VIDEO_MP4
-            lowerUrl.endsWith(".3gp") -> return "3GP" to MimeTypes.VIDEO_H263
         }
 
         return null to null
@@ -165,15 +176,12 @@ class VideoMediaResolver(
         sourceName: String?,
         authorName: String?
     ): String {
-        // 1. Try to extract a rich caption from HTML
         val caption = extractCaption(html)?.let { cleanTitle(decodeHtmlEntities(it)) }
         
         if (!caption.isNullOrBlank()) {
-            // For social sites, match the "Proper Title" format of Instagram Reels
             if (effectiveUrl.contains("instagram.com") || effectiveUrl.contains("facebook.com") || effectiveUrl.contains("tiktok.com")) {
                 return caption
             }
-            // For other sites, adding the source name makes it look cleaner
             return if (!sourceName.isNullOrBlank() && !caption.contains(sourceName, true)) {
                 "$caption • $sourceName"
             } else {
@@ -181,19 +189,17 @@ class VideoMediaResolver(
             }
         }
 
-        // 2. If no caption, but we have an author
         if (!authorName.isNullOrBlank()) {
             return if (!sourceName.isNullOrBlank()) "$sourceName Video by $authorName" else "Video by $authorName"
         }
 
-        // 3. Fallback to URL filename
         val uri = Uri.parse(effectiveUrl)
         val lastPathSegment = uri.lastPathSegment ?: Uri.parse(originalUrl).lastPathSegment
-        if (!lastPathSegment.isNullOrBlank() && lastPathSegment.length > 2 && isKnownExtension(lastPathSegment)) {
-            return lastPathSegment.substringBeforeLast('.').replace('_', ' ').replace('-', ' ').trim()
+        if (!lastPathSegment.isNullOrBlank() && lastPathSegment.length > 2) {
+            val name = lastPathSegment.substringBeforeLast('.').replace('_', ' ').replace('-', ' ').trim()
+            if (name.length > 3 && !name.contains("videoplayback", true)) return name
         }
 
-        // 4. Default fallback
         return if (!sourceName.isNullOrBlank()) "$sourceName Video ($mediaType)" else "Online Video ($mediaType)"
     }
 
@@ -277,7 +283,7 @@ class VideoMediaResolver(
             }
 
             retriever = MediaMetadataRetriever()
-            retriever.setDataSource(targetUrl, mapOf("User-Agent" to "SZPlayer/1.0 (Linux; Android)"))
+            retriever.setDataSource(targetUrl, mapOf("User-Agent" to userAgent))
             val bitmap = retriever.getFrameAtTime(1_000_000, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
                 ?: retriever.getFrameAtTime(0, MediaMetadataRetriever.OPTION_CLOSEST_SYNC)
                 ?: retriever.frameAtTime
@@ -299,7 +305,7 @@ class VideoMediaResolver(
         return try {
             val request = Request.Builder()
                 .url(m3u8Url)
-                .header("User-Agent", "SZPlayer/1.0 (Linux; Android)")
+                .header("User-Agent", userAgent)
                 .build()
             httpClient.newCall(request).execute().use { response ->
                 if (!response.isSuccessful) return null
@@ -399,7 +405,7 @@ class VideoMediaResolver(
     }
 
     private fun isKnownExtension(segment: String): Boolean {
-        return listOf(".mp4", ".m3u8", ".mpd", ".webm", ".mkv", ".mov", ".3gp", ".ts").any { segment.endsWith(it, ignoreCase = true) }
+        return listOf(".mp4", ".m3u8", ".mpd", ".webm", ".mkv", ".mov", ".3gp", ".ts", ".m4v").any { segment.endsWith(it, ignoreCase = true) }
     }
 
     private fun cleanTitle(title: String): String = title
@@ -418,7 +424,7 @@ class VideoMediaResolver(
         var retriever: MediaMetadataRetriever? = null
         return try {
             retriever = MediaMetadataRetriever()
-            retriever.setDataSource(url, mapOf("User-Agent" to "SZPlayer/1.0 (Linux; Android)"))
+            retriever.setDataSource(url, mapOf("User-Agent" to userAgent))
             retriever.extractMetadata(MediaMetadataRetriever.METADATA_KEY_DURATION)?.toLongOrNull()?.takeIf { it > 0 }
         } catch (e: Exception) { null } finally { try { retriever?.release() } catch (e: Exception) {} }
     }

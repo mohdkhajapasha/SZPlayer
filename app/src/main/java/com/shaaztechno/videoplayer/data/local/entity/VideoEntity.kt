@@ -15,6 +15,7 @@ data class VideoEntity(
     val category: String?,
     val duration: Long,
     val type: String, // ONLINE, LOCAL, DOWNLOADED
+    val mimeType: String? = null,
     val localUri: String?,
     val size: Long,
     val folder: String?,
@@ -31,6 +32,7 @@ data class VideoEntity(
             category = category,
             duration = duration,
             type = VideoType.valueOf(type),
+            mimeType = mimeType,
             localUri = localUri,
             size = size,
             folder = folder,
@@ -50,6 +52,7 @@ fun Video.toEntity(): VideoEntity {
         category = category,
         duration = duration,
         type = type.name,
+        mimeType = mimeType,
         localUri = localUri,
         size = size,
         folder = folder,

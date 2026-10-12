@@ -23,7 +23,6 @@ import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import coil.compose.AsyncImage
-import com.shaaztechno.videoplayer.presentation.components.BannerAd
 import com.shaaztechno.videoplayer.ui.theme.*
 import java.util.Locale
 
@@ -50,9 +49,6 @@ fun InstagramScreen(
                     containerColor = Black
                 )
             )
-        },
-        bottomBar = {
-            BannerAd(modifier = Modifier.navigationBarsPadding())
         },
         containerColor = Black,
         contentWindowInsets = WindowInsets(0, 0, 0, 0)

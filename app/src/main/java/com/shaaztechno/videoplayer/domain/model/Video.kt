@@ -11,6 +11,7 @@ data class Video(
     val category: String? = null,
     val duration: Long = 0,
     val type: VideoType = VideoType.ONLINE,
+    val mimeType: String? = null,
     val localUri: String? = null,
     val size: Long = 0,
     val folder: String? = null,

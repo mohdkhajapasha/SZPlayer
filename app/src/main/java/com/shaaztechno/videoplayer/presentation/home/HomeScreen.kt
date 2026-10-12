@@ -152,6 +152,9 @@ fun HomeScreen(
                 windowInsets = WindowInsets.statusBars
             )
         },
+        bottomBar = {
+            BannerAd()
+        },
         floatingActionButton = {
             FloatingActionButton(
                 onClick = onAddVideoClick,
@@ -234,11 +237,6 @@ fun HomeScreen(
                 }
             }
 
-            // Ad below recent
-            item {
-                BannerAd(modifier = Modifier.padding(top = 16.dp))
-            }
-
             // 3. My Playlists Section
             if (uiState.playlists.isNotEmpty()) {
                 item {
@@ -266,7 +264,7 @@ fun HomeScreen(
                 }
             }
 
-            // 3. Online Catalog Section
+            // 4. Online Catalog Section
             if (uiState.onlineVideos.isNotEmpty()) {
                 item {
                     Spacer(modifier = Modifier.height(18.dp))
@@ -372,12 +370,8 @@ fun HomeScreen(
                     }
                 }
             }
-            // Ad above Local Videos
-            item {
-                BannerAd(modifier = Modifier.padding(top = 16.dp))
-            }
 
-        // 4. Local Videos
+        // 5. Local Videos
             val folderList = uiState.folders.entries.toList()
 
             if (folderList.isNotEmpty()) {
@@ -426,10 +420,6 @@ fun HomeScreen(
                         )
                     )
                 }
-            }
-            // Ad above Local Videos
-            item {
-                BannerAd(modifier = Modifier.padding(top = 16.dp))
             }
         }
     }

@@ -15,7 +15,6 @@ import com.shaaztechno.videoplayer.domain.repository.VideoRepository
 import com.shaaztechno.videoplayer.util.Config
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.Flow
-import kotlinx.coroutines.flow.first
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.withContext
 
@@ -73,7 +72,8 @@ class VideoRepositoryImpl(
                 MediaStore.Video.Media.DURATION,
                 MediaStore.Video.Media.SIZE,
                 MediaStore.Video.Media.DATE_ADDED,
-                MediaStore.Video.Media.BUCKET_DISPLAY_NAME
+                MediaStore.Video.Media.BUCKET_DISPLAY_NAME,
+                MediaStore.Video.Media.MIME_TYPE
             )
 
             val cursor = context.contentResolver.query(
@@ -91,6 +91,7 @@ class VideoRepositoryImpl(
                 val sizeColumn = it.getColumnIndexOrThrow(MediaStore.Video.Media.SIZE)
                 val dateColumn = it.getColumnIndexOrThrow(MediaStore.Video.Media.DATE_ADDED)
                 val bucketColumn = it.getColumnIndexOrThrow(MediaStore.Video.Media.BUCKET_DISPLAY_NAME)
+                val mimeColumn = it.getColumnIndexOrThrow(MediaStore.Video.Media.MIME_TYPE)
 
                 while (it.moveToNext()) {
                     val id = it.getLong(idColumn)
@@ -99,6 +100,7 @@ class VideoRepositoryImpl(
                     val size = it.getLong(sizeColumn)
                     val date = it.getLong(dateColumn)
                     val folder = it.getString(bucketColumn)
+                    val mimeType = it.getString(mimeColumn)
                     val contentUri = ContentUris.withAppendedId(
                         MediaStore.Video.Media.EXTERNAL_CONTENT_URI,
                         id
@@ -113,6 +115,7 @@ class VideoRepositoryImpl(
                             url = contentUri,
                             duration = duration,
                             type = VideoType.LOCAL,
+                            mimeType = mimeType,
                             localUri = contentUri,
                             size = size,
                             dateAdded = date,
@@ -191,6 +194,7 @@ class VideoRepositoryImpl(
                     title = video.title,
                     url = video.url,
                     type = video.type.name,
+                    mimeType = video.mimeType,
                     thumbnailUrl = resolvedThumbnailUrl,
                     lastPosition = position,
                     duration = duration,
@@ -198,14 +202,8 @@ class VideoRepositoryImpl(
                 )
             )
 
-            // Limit history to 20 records
-            val history = historyDao.getHistory().first()
-            if (history.size > 20) {
-                val recordsToDelete = history.drop(20)
-                recordsToDelete.forEach {
-                    historyDao.deleteHistory(it.videoId)
-                }
-            }
+            // Trim to the 20 most-recent records in a single SQL query
+            historyDao.trimHistory(20)
         }
     }
 
